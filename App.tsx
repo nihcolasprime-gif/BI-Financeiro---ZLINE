@@ -1,11 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   LayoutDashboard, Filter, TrendingUp, DollarSign, Activity, 
   AlertTriangle, Calendar, PieChart as PieIcon, List, 
   Briefcase, BarChart2, Target, ShieldAlert, Users, Battery,
   Calculator, Scale, History, UserCheck, TrendingDown, ArrowRight,
   Landmark, Zap, Trophy, Percent, X, MoreHorizontal, ExternalLink,
-  ChevronLeft, AlertCircle, ChevronDown
+  ChevronLeft, AlertCircle, ChevronDown, Sparkles
 } from 'lucide-react';
 import { ALL_CLIENTS, ALL_COSTS, MONTHS, STATUSES } from './constants';
 import KPICard from './components/KPICard';
@@ -37,20 +37,59 @@ const STANDARD_MONTHS = [
 
 // --- SUB-COMPONENTS ---
 
-const TabButton = ({ id, label, icon: Icon, activeTab, onClick }: { id: TabType, label: string, icon: any, activeTab: TabType, onClick: (id: TabType) => void }) => (
-  <button
-    onClick={() => onClick(id)}
-    className={`
-      relative flex items-center gap-2 px-5 py-3 text-sm font-semibold rounded-full transition-all duration-300
-      ${activeTab === id 
-        ? 'bg-slate-800 text-white shadow-lg shadow-slate-300/50 scale-105' 
-        : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800'}
-    `}
-  >
-    <Icon size={16} />
-    {label}
-  </button>
+const SplashScreen = () => (
+  <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center animate-fade-out-delayed">
+    <div className="relative">
+      <div className="absolute inset-0 bg-indigo-500 blur-3xl opacity-20 animate-pulse rounded-full"></div>
+      <div className="relative h-24 w-24 bg-gradient-to-tr from-indigo-600 to-slate-800 rounded-3xl flex items-center justify-center shadow-2xl shadow-indigo-500/30 animate-scale-in">
+        <span className="text-white font-black text-5xl">Z</span>
+      </div>
+    </div>
+    <div className="mt-8 text-center animate-slide-up-fade">
+      <h1 className="text-3xl font-bold text-white tracking-tight mb-2">Bem vindo ao Z</h1>
+      <p className="text-slate-400 text-sm tracking-widest uppercase">Intelligence Dashboard</p>
+    </div>
+    
+    <style>{`
+      @keyframes scale-in {
+        0% { transform: scale(0.5); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      @keyframes slide-up-fade {
+        0% { transform: translateY(20px); opacity: 0; }
+        100% { transform: translateY(0); opacity: 1; }
+      }
+      @keyframes fade-out-delayed {
+        0%, 80% { opacity: 1; pointer-events: all; }
+        100% { opacity: 0; pointer-events: none; }
+      }
+      .animate-scale-in { animation: scale-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      .animate-slide-up-fade { animation: slide-up-fade 0.8s 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+      .animate-fade-out-delayed { animation: fade-out-delayed 2.5s ease-in-out forwards; }
+    `}</style>
+  </div>
 );
+
+const TabButton = ({ id, label, icon: Icon, activeTab, onClick }: { id: TabType, label: string, icon: any, activeTab: TabType, onClick: (id: TabType) => void }) => {
+  const isActive = activeTab === id;
+  return (
+    <button
+      onClick={() => onClick(id)}
+      className={`
+        relative flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-full transition-all duration-300 whitespace-nowrap
+        ${isActive 
+          ? 'bg-slate-800 text-white shadow-lg shadow-indigo-500/20 scale-105 ring-1 ring-white/20' 
+          : 'bg-white/60 text-slate-500 hover:bg-white hover:text-indigo-600 hover:shadow-md'}
+      `}
+    >
+      <Icon size={16} className={isActive ? 'text-indigo-300' : ''} />
+      {label}
+      {isActive && (
+        <span className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-indigo-400 rounded-full"></span>
+      )}
+    </button>
+  );
+};
 
 const ClientDetailModal = ({ client, onClose }: { client: any | null, onClose: () => void }) => {
   if (!client) return null;
@@ -60,8 +99,8 @@ const ClientDetailModal = ({ client, onClose }: { client: any | null, onClose: (
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end">
       <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
-      <div className="relative w-full max-w-md h-full bg-white/90 backdrop-blur-xl border-l border-white/50 shadow-2xl p-8 overflow-y-auto animate-slide-in-right transform transition-transform duration-300">
-         <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 text-slate-500">
+      <div className="relative w-full max-w-md h-full bg-white/95 backdrop-blur-xl border-l border-white/50 shadow-2xl p-8 overflow-y-auto animate-slide-in-right transform transition-transform duration-300">
+         <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 text-slate-500 transition-colors">
            <X size={20} />
          </button>
          
@@ -69,84 +108,86 @@ const ClientDetailModal = ({ client, onClose }: { client: any | null, onClose: (
            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-lg shadow-blue-500/30">
               {c.Cliente.charAt(0)}
            </div>
-           <h2 className="text-3xl font-bold text-slate-800">{c.Cliente}</h2>
-           <p className="text-slate-500 text-sm flex items-center gap-2 mt-1">
+           <h2 className="text-3xl font-bold text-slate-800 tracking-tight">{c.Cliente}</h2>
+           <p className="text-slate-500 text-sm flex items-center gap-2 mt-1 font-medium">
              <span className={`w-2 h-2 rounded-full ${c.Status_Cliente === 'Ativo' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
              {c.Status_Cliente} {c.Status_Detalhe && `• ${c.Status_Detalhe}`}
            </p>
          </div>
 
          <div className="mt-8 space-y-6">
-           <div className="p-4 bg-slate-50/50 rounded-xl border border-slate-100">
-             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Financeiro Mês</h3>
+           <div className="p-5 bg-slate-50/80 rounded-2xl border border-slate-100 shadow-sm">
+             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Financeiro Mês</h3>
              <div className="grid grid-cols-2 gap-4">
                <div>
-                 <p className="text-xs text-slate-500">Receita Bruta</p>
-                 <p className="font-bold text-slate-800">{formatCurrency(c.Receita_Mensal_BRL)}</p>
+                 <p className="text-xs text-slate-500 mb-1">Receita Bruta</p>
+                 <p className="font-bold text-slate-800 text-lg">{formatCurrency(c.Receita_Mensal_BRL)}</p>
                </div>
                <div>
-                 <p className="text-xs text-slate-500">Receita Líquida</p>
-                 <p className="font-bold text-slate-800">{formatCurrency(c.Receita_Liquida_Apos_Imposto_BRL)}</p>
+                 <p className="text-xs text-slate-500 mb-1">Receita Líquida</p>
+                 <p className="font-bold text-slate-800 text-lg">{formatCurrency(c.Receita_Liquida_Apos_Imposto_BRL)}</p>
                </div>
-               <div className="col-span-2 pt-2 border-t border-slate-200">
-                 <p className="text-xs text-slate-500">Lucro Operacional Estimado</p>
-                 <p className={`font-bold text-lg ${c.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+               <div className="col-span-2 pt-3 border-t border-slate-200 mt-1">
+                 <p className="text-xs text-slate-500 mb-1">Lucro Operacional Estimado</p>
+                 <p className={`font-bold text-xl ${c.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                    {formatCurrency(c.profit)}
                  </p>
                </div>
              </div>
            </div>
 
-           <div className="p-4 bg-slate-50/50 rounded-xl border border-slate-100">
-             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Operação</h3>
-             <div className="space-y-3">
+           <div className="p-5 bg-slate-50/80 rounded-2xl border border-slate-100 shadow-sm">
+             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Operação</h3>
+             <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-600">Contratados</span>
-                  <span className="font-semibold text-slate-800">{c.Conteudos_Contratados} un</span>
+                  <span className="text-sm text-slate-600 font-medium">Contratados</span>
+                  <span className="font-bold text-slate-800">{c.Conteudos_Contratados} un</span>
                 </div>
-                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                  <div className="bg-blue-500 h-full" style={{ width: `${(c.Conteudos_Entregues / c.Conteudos_Contratados) * 100}%` }}></div>
+                <div className="relative pt-1">
+                  <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                    <div className="bg-blue-500 h-full transition-all duration-500" style={{ width: `${(c.Conteudos_Entregues / c.Conteudos_Contratados) * 100}%` }}></div>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-emerald-600">{c.Conteudos_Entregues} Entregues</span>
-                  <span className="text-slate-400">{c.Conteudos_Nao_Entregues} Pendentes</span>
+                <div className="flex justify-between items-center text-xs font-medium">
+                  <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded">{c.Conteudos_Entregues} Entregues</span>
+                  <span className="text-slate-500 bg-slate-100 px-2 py-1 rounded">{c.Conteudos_Nao_Entregues} Pendentes</span>
                 </div>
              </div>
            </div>
 
-           <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
-              <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-3">Precificação Unitária (20% Margem)</h3>
+           <div className="p-5 bg-indigo-50/60 rounded-2xl border border-indigo-100 shadow-sm">
+              <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-4">Precificação Unitária (20% Margem)</h3>
               
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">Custo Operacional / un:</span>
-                  <span className="font-medium text-slate-700">{formatCurrency(c.costPerContent)}</span>
+              <div className="space-y-3 mb-5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Custo Op. / un:</span>
+                  <span className="font-semibold text-slate-700">{formatCurrency(c.costPerContent)}</span>
                 </div>
-                <div className="flex justify-between text-xs">
+                <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Preço Ideal (Target):</span>
-                  <span className="font-medium text-indigo-600">{formatCurrency(c.idealPriceUnit)}</span>
+                  <span className="font-bold text-indigo-600">{formatCurrency(c.idealPriceUnit)}</span>
                 </div>
-                <div className="h-px bg-indigo-200 my-1"></div>
+                <div className="h-px bg-indigo-200 my-2"></div>
                 <div className="flex justify-between items-center">
                    <span className="text-sm text-slate-600">Preço Real / un</span>
-                   <span className="font-bold text-slate-800">{formatCurrency(c.revPerContent)}</span>
+                   <span className="font-bold text-xl text-slate-800">{formatCurrency(c.revPerContent)}</span>
                 </div>
               </div>
 
               {unitGap < 0 ? (
-                <div className="text-xs text-rose-600 flex items-start gap-2 bg-rose-50 p-2 rounded border border-rose-100">
-                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                <div className="text-xs text-rose-700 flex items-start gap-3 bg-white p-3 rounded-xl border border-rose-100 shadow-sm">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-rose-500" />
                   <div>
-                    <span className="font-bold block">Prejuízo de {formatCurrency(Math.abs(unitGap))} por item.</span>
-                    <span>Sugerido reajuste de contrato ou redução de entregas.</span>
+                    <span className="font-bold block text-sm mb-1">Prejuízo de {formatCurrency(Math.abs(unitGap))} por item.</span>
+                    <span className="opacity-90">Abaixo da margem ideal. Sugerido reajuste de contrato ou redução de escopo.</span>
                   </div>
                 </div>
               ) : (
-                <div className="text-xs text-emerald-600 flex items-start gap-2 bg-emerald-50 p-2 rounded border border-emerald-100">
-                  <UserCheck size={14} className="mt-0.5 shrink-0" />
+                <div className="text-xs text-emerald-700 flex items-start gap-3 bg-white p-3 rounded-xl border border-emerald-100 shadow-sm">
+                  <UserCheck size={18} className="mt-0.5 shrink-0 text-emerald-500" />
                   <div>
-                    <span className="font-bold block">Lucro de {formatCurrency(unitGap)} acima da meta por item.</span>
-                    <span>Contrato saudável com margem superior a 20%.</span>
+                    <span className="font-bold block text-sm mb-1">Lucro de {formatCurrency(unitGap)} acima da meta.</span>
+                    <span className="opacity-90">Contrato saudável com margem superior a 20%. Excelente performance.</span>
                   </div>
                 </div>
               )}
@@ -159,6 +200,7 @@ const ClientDetailModal = ({ client, onClose }: { client: any | null, onClose: (
 
 const App: React.FC = () => {
   // --- State ---
+  const [showSplash, setShowSplash] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('executive');
   const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[1]); // Default to "Janeiro/2026"
   const [selectedStatus, setSelectedStatus] = useState<string>('Todos');
@@ -169,6 +211,14 @@ const App: React.FC = () => {
 
   // Cost Detail State
   const [selectedCostItem, setSelectedCostItem] = useState<CostData | null>(null);
+
+  // --- SPLASH SCREEN EFFECT ---
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 2200); // 2.2s allows animation to complete
+    return () => clearTimeout(timer);
+  }, []);
 
   // --- DERIVED STATE FOR FILTERS ---
   const [currentMonthName, currentYear] = selectedMonth.split('/');
@@ -301,11 +351,11 @@ const App: React.FC = () => {
     return { trend, ltvData, totalAnnualRevenue, totalAnnualCost, totalAnnualProfit };
   }, []);
 
-  // --- 4. ADVANCED ALERTS LOGIC ---
+  // --- 4. ADVANCED & GLOBAL ALERTS LOGIC (UPDATED) ---
   const detailedAlerts = useMemo(() => {
-    const alerts = [];
+    const alerts: any[] = [];
     
-    // 1. Month Alerts (Negative Margin)
+    // 1. GLOBAL MONTH ALERTS (Negative Margin)
     annualData.trend.forEach(m => {
         if (m.margin < 0) {
             alerts.push({
@@ -319,35 +369,66 @@ const App: React.FC = () => {
         }
     });
 
-    // 2. Client Alerts (Negative Net Revenue / Loss)
-    // We scan ALL clients across ALL months
-    const clientLosses = viewData.clients.filter(c => c.profit < 0);
-    clientLosses.forEach(c => {
-        alerts.push({
+    // 2. GLOBAL CLIENT ALERTS (Scan ALL clients across ALL months for specific losses)
+    // First, map cost per content for each month to be accurate
+    const costMap = new Map();
+    MONTHS.forEach(month => {
+       const mCosts = ALL_COSTS.filter(c => c.Mes_Referencia === month && c.Ativo_no_Mes && !isNonOperationalCost(c.Tipo_Custo));
+       const mClients = ALL_CLIENTS.filter(c => c.Mes_Referencia === month);
+       
+       const totalOpCost = mCosts.reduce((s, c) => s + c.Valor_Mensal_BRL, 0);
+       const totalDelivered = mClients.reduce((s, c) => s + c.Conteudos_Entregues, 0);
+       const unitCost = totalDelivered > 0 ? totalOpCost / totalDelivered : 0;
+       costMap.set(month, unitCost);
+    });
+
+    // Iterate ALL clients to find negative margin instances
+    ALL_CLIENTS.forEach(c => {
+       const unitCost = costMap.get(c.Mes_Referencia) || 0;
+       const allocatedCost = c.Conteudos_Entregues * unitCost;
+       const profit = c.Receita_Liquida_Apos_Imposto_BRL - allocatedCost;
+       
+       if (profit < 0) {
+          alerts.push({
             type: 'warning',
             title: 'Cliente com Prejuízo',
             subject: c.Cliente,
-            value: formatCurrency(c.profit),
-            desc: `No mês de ${selectedMonth}, este cliente custou mais do que pagou.`,
-            icon: TrendingDown
-        });
+            value: formatCurrency(profit),
+            desc: `Registrado em ${c.Mes_Referencia}. Receita inferior ao custo operacional de entrega (${c.Conteudos_Entregues} un).`,
+            icon: TrendingDown,
+            isHistorical: c.Mes_Referencia !== selectedMonth // Flag if it's from history
+          });
+       }
     });
 
-    return alerts;
-  }, [annualData, viewData, selectedMonth]);
+    // Sort: Critical first, then by value magnitude
+    return alerts.sort((a,b) => {
+        if(a.type === 'critical' && b.type !== 'critical') return -1;
+        if(a.type !== 'critical' && b.type === 'critical') return 1;
+        return 0;
+    });
+  }, [annualData, selectedMonth]); // Dependent on annualData calc and current selectedMonth for context
+
+  if (showSplash) {
+    return <SplashScreen />;
+  }
 
   return (
-    <div className="min-h-screen text-slate-800 selection:bg-indigo-100">
+    <div className="min-h-screen text-slate-800 selection:bg-indigo-100 flex flex-col">
       <ClientDetailModal 
         client={selectedDetailClient} 
         onClose={() => setSelectedDetailClient(null)} 
       />
       
       {/* HEADER GLASS */}
-      <header className="fixed top-0 w-full z-40 bg-white/70 backdrop-blur-xl border-b border-white/50 shadow-sm transition-all duration-300">
+      <header className="fixed top-0 w-full z-40 bg-white/80 backdrop-blur-xl border-b border-white/50 shadow-sm transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-4">
+          
+          {/* Top Row: Branding & Filters */}
+          <div className="flex flex-col md:flex-row justify-between items-center py-4 gap-4">
+            
+            {/* Brand */}
+            <div className="flex items-center gap-4 self-start md:self-auto">
               <div className="h-10 w-10 bg-gradient-to-tr from-slate-900 to-slate-700 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-slate-900/20 transform hover:scale-105 transition-transform cursor-pointer">
                 Z
               </div>
@@ -357,42 +438,43 @@ const App: React.FC = () => {
               </div>
             </div>
 
+            {/* Filters - Responsive Grid/Flex */}
             {activeTab !== 'annual' && activeTab !== 'alerts' && (
-              <div className="flex items-center gap-2 bg-white/50 p-1 rounded-full border border-white/60 shadow-inner">
+              <div className="flex flex-wrap md:flex-nowrap items-center justify-center gap-2 bg-white/60 p-1.5 rounded-2xl border border-white/60 shadow-inner w-full md:w-auto">
                 {/* Month Selector */}
-                <div className="relative group">
+                <div className="relative group flex-1 md:flex-none">
                   <select 
                     value={currentMonthName}
                     onChange={(e) => setSelectedMonth(`${e.target.value}/${currentYear}`)}
-                    className="appearance-none bg-transparent text-sm font-semibold text-slate-700 border-none focus:ring-0 cursor-pointer outline-none pl-3 pr-8 py-1.5 rounded-full hover:bg-white/80 transition-colors"
+                    className="w-full md:w-auto appearance-none bg-transparent text-sm font-semibold text-slate-700 border-none focus:ring-0 cursor-pointer outline-none pl-3 pr-8 py-1.5 rounded-xl hover:bg-white/80 transition-colors"
                   >
                     {STANDARD_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                   <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
                 
-                <div className="h-4 w-px bg-slate-300"></div>
+                <div className="hidden md:block h-4 w-px bg-slate-300"></div>
 
                 {/* Year Selector */}
-                <div className="relative group">
+                <div className="relative group flex-1 md:flex-none">
                   <select 
                     value={currentYear}
                     onChange={(e) => setSelectedMonth(`${currentMonthName}/${e.target.value}`)}
-                    className="appearance-none bg-transparent text-sm font-semibold text-slate-700 border-none focus:ring-0 cursor-pointer outline-none pl-3 pr-8 py-1.5 rounded-full hover:bg-white/80 transition-colors"
+                    className="w-full md:w-auto appearance-none bg-transparent text-sm font-semibold text-slate-700 border-none focus:ring-0 cursor-pointer outline-none pl-3 pr-8 py-1.5 rounded-xl hover:bg-white/80 transition-colors"
                   >
                     {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                   <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
 
-                <div className="h-4 w-px bg-slate-300"></div>
+                <div className="hidden md:block h-4 w-px bg-slate-300"></div>
 
                 {/* Client Selector */}
-                <div className="relative group">
+                <div className="relative group flex-auto md:flex-none min-w-[120px]">
                   <select 
                     value={selectedClient}
                     onChange={(e) => setSelectedClient(e.target.value)}
-                    className="appearance-none bg-transparent text-sm font-bold text-slate-900 border-none focus:ring-0 cursor-pointer outline-none pl-3 pr-8 py-1.5 rounded-full hover:bg-white/80 transition-colors"
+                    className="w-full md:w-auto appearance-none bg-transparent text-sm font-bold text-slate-900 border-none focus:ring-0 cursor-pointer outline-none pl-3 pr-8 py-1.5 rounded-xl hover:bg-white/80 transition-colors"
                   >
                     {uniqueClients.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -402,23 +484,28 @@ const App: React.FC = () => {
             )}
           </div>
 
-          <div className="flex overflow-x-auto space-x-2 pb-4 no-scrollbar">
+          {/* Bottom Row: Tabs */}
+          <div className="flex overflow-x-auto space-x-2 pb-4 pt-1 no-scrollbar mask-gradient-right">
             <TabButton id="executive" label="Visão Mensal" icon={LayoutDashboard} activeTab={activeTab} onClick={setActiveTab} />
             <TabButton id="roi" label="ROI & Mercado" icon={Target} activeTab={activeTab} onClick={setActiveTab} />
             <TabButton id="annual" label="Visão Anual" icon={History} activeTab={activeTab} onClick={setActiveTab} />
             <TabButton id="clients" label="Clientes" icon={Users} activeTab={activeTab} onClick={setActiveTab} />
             <TabButton id="costs" label="Custos" icon={DollarSign} activeTab={activeTab} onClick={setActiveTab} />
-            <TabButton id="alerts" label="Alertas & Riscos" icon={ShieldAlert} activeTab={activeTab} onClick={setActiveTab} />
+            <TabButton id="alerts" label="Alertas" icon={ShieldAlert} activeTab={activeTab} onClick={setActiveTab} />
           </div>
         </div>
       </header>
 
       {/* MAIN CONTENT */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-44 space-y-8 pb-20">
+      {/* Added pt-spacing to account for variable header height and key for animation triggering */}
+      <main 
+        key={activeTab}
+        className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mt-[180px] md:mt-[160px] space-y-8 pb-20 animate-fade-in w-full"
+      >
         
         {/* --- TAB 1: EXECUTIVE --- */}
         {activeTab === 'executive' && (
-          <div className="space-y-8 animate-fade-in">
+          <div className="space-y-8">
             {/* KPI GRID */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <KPICard title="Receita Bruta" value={viewData.grossRevenue} colorCondition="always-neutral" icon={<DollarSign className="text-slate-900" />} />
@@ -523,7 +610,7 @@ const App: React.FC = () => {
 
         {/* --- TAB 2: ROI --- */}
         {activeTab === 'roi' && (
-           <div className="space-y-6 animate-fade-in">
+           <div className="space-y-6">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="glass-panel p-10 rounded-3xl shadow-sm text-center relative overflow-hidden group">
                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
@@ -578,7 +665,7 @@ const App: React.FC = () => {
 
         {/* --- TAB 3: ANNUAL --- */}
         {activeTab === 'annual' && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="space-y-6">
              <div className="glass-panel p-8 rounded-3xl shadow-sm">
                 <h2 className="text-2xl font-bold text-slate-900 mb-8">Performance Anual Acumulada</h2>
                 <div className="w-full">
@@ -596,7 +683,7 @@ const App: React.FC = () => {
 
         {/* --- TAB 4: CLIENTS --- */}
         {activeTab === 'clients' && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="space-y-6">
              <div className="glass-panel p-8 rounded-3xl shadow-sm mb-6">
                  <div className="flex justify-between items-center mb-6">
                     <div>
@@ -628,7 +715,7 @@ const App: React.FC = () => {
 
         {/* --- TAB 5: COSTS --- */}
         {activeTab === 'costs' && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="space-y-6">
             <div className="glass-panel p-8 rounded-3xl shadow-sm grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
                <div className="w-full">
                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4 text-center">Distribuição</h3>
@@ -752,7 +839,7 @@ const App: React.FC = () => {
 
         {/* --- TAB 6: ALERTS (Redesigned) --- */}
         {activeTab === 'alerts' && (
-           <div className="space-y-6 animate-fade-in">
+           <div className="space-y-6">
               <h2 className="text-2xl font-bold text-slate-800 mb-4">Central de Alertas e Riscos</h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -780,6 +867,7 @@ const App: React.FC = () => {
                             alert.type === 'critical' ? 'bg-rose-200 text-rose-800' : 'bg-amber-200 text-amber-800'
                           }`}>
                             {alert.type === 'critical' ? 'Crítico' : 'Atenção'}
+                            {alert.isHistorical && <span className="ml-2 opacity-75">• Histórico</span>}
                           </div>
                           
                           <h3 className={`text-lg font-bold mb-1 ${
