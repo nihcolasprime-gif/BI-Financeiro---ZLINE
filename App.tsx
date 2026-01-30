@@ -5,7 +5,7 @@ import {
   Briefcase, BarChart2, Target, ShieldAlert, Users, Battery,
   Calculator, Scale, History, UserCheck, TrendingDown, ArrowRight,
   Landmark, Zap, Trophy, Percent, X, MoreHorizontal, ExternalLink,
-  ChevronLeft, AlertCircle
+  ChevronLeft, AlertCircle, ChevronDown
 } from 'lucide-react';
 import { ALL_CLIENTS, ALL_COSTS, MONTHS, STATUSES } from './constants';
 import KPICard from './components/KPICard';
@@ -22,7 +22,7 @@ type TabType = 'executive' | 'roi' | 'annual' | 'clients' | 'costs' | 'alerts';
 // --- HELPERS FOR BUSINESS LOGIC ---
 const isNonOperationalCost = (costName: string) => {
   const lower = costName.toLowerCase();
-  return lower.includes('estorno') || lower.includes('contador') || lower.includes('imposto'); // Added imposto generically if needed later
+  return lower.includes('estorno') || lower.includes('contador') || lower.includes('imposto');
 };
 
 const isLaborCost = (costName: string) => {
@@ -30,7 +30,12 @@ const isLaborCost = (costName: string) => {
   return lower.includes('pro-labore') || lower.includes('editor') || lower.includes('fotografo') || lower.includes('social media');
 };
 
-// --- SUB-COMPONENTS (Defined outside App to avoid re-renders) ---
+const STANDARD_MONTHS = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+
+// --- SUB-COMPONENTS ---
 
 const TabButton = ({ id, label, icon: Icon, activeTab, onClick }: { id: TabType, label: string, icon: any, activeTab: TabType, onClick: (id: TabType) => void }) => (
   <button
@@ -155,7 +160,7 @@ const ClientDetailModal = ({ client, onClose }: { client: any | null, onClose: (
 const App: React.FC = () => {
   // --- State ---
   const [activeTab, setActiveTab] = useState<TabType>('executive');
-  const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[1]); 
+  const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[1]); // Default to "Janeiro/2026"
   const [selectedStatus, setSelectedStatus] = useState<string>('Todos');
   const [selectedClient, setSelectedClient] = useState<string>('Todos');
   
@@ -164,6 +169,11 @@ const App: React.FC = () => {
 
   // Cost Detail State
   const [selectedCostItem, setSelectedCostItem] = useState<CostData | null>(null);
+
+  // --- DERIVED STATE FOR FILTERS ---
+  const [currentMonthName, currentYear] = selectedMonth.split('/');
+  const availableYears = useMemo(() => Array.from(new Set(MONTHS.map(m => m.split('/')[1]))).sort(), []);
+  const uniqueClients = ['Todos', ...Array.from(new Set(ALL_CLIENTS.map(c => c.Cliente)))];
 
   // --- 1. PROCESSED DATA FOR SELECTED MONTH ---
   const monthlyMetrics = useMemo(() => {
@@ -326,8 +336,6 @@ const App: React.FC = () => {
     return alerts;
   }, [annualData, viewData, selectedMonth]);
 
-  const uniqueClients = ['Todos', ...Array.from(new Set(ALL_CLIENTS.map(c => c.Cliente)))];
-
   return (
     <div className="min-h-screen text-slate-800 selection:bg-indigo-100">
       <ClientDetailModal 
@@ -350,22 +358,46 @@ const App: React.FC = () => {
             </div>
 
             {activeTab !== 'annual' && activeTab !== 'alerts' && (
-              <div className="flex items-center gap-2 bg-white/50 p-1.5 rounded-full border border-white/60 shadow-inner">
-                <select 
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="bg-transparent text-sm font-semibold text-slate-700 border-none focus:ring-0 cursor-pointer outline-none px-3 py-1 rounded-full hover:bg-white/80 transition-colors"
-                >
-                  {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
+              <div className="flex items-center gap-2 bg-white/50 p-1 rounded-full border border-white/60 shadow-inner">
+                {/* Month Selector */}
+                <div className="relative group">
+                  <select 
+                    value={currentMonthName}
+                    onChange={(e) => setSelectedMonth(`${e.target.value}/${currentYear}`)}
+                    className="appearance-none bg-transparent text-sm font-semibold text-slate-700 border-none focus:ring-0 cursor-pointer outline-none pl-3 pr-8 py-1.5 rounded-full hover:bg-white/80 transition-colors"
+                  >
+                    {STANDARD_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+                
                 <div className="h-4 w-px bg-slate-300"></div>
-                <select 
-                  value={selectedClient}
-                  onChange={(e) => setSelectedClient(e.target.value)}
-                  className="bg-transparent text-sm font-bold text-slate-900 border-none focus:ring-0 cursor-pointer outline-none px-3 py-1 rounded-full hover:bg-white/80 transition-colors"
-                >
-                  {uniqueClients.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+
+                {/* Year Selector */}
+                <div className="relative group">
+                  <select 
+                    value={currentYear}
+                    onChange={(e) => setSelectedMonth(`${currentMonthName}/${e.target.value}`)}
+                    className="appearance-none bg-transparent text-sm font-semibold text-slate-700 border-none focus:ring-0 cursor-pointer outline-none pl-3 pr-8 py-1.5 rounded-full hover:bg-white/80 transition-colors"
+                  >
+                    {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+
+                <div className="h-4 w-px bg-slate-300"></div>
+
+                {/* Client Selector */}
+                <div className="relative group">
+                  <select 
+                    value={selectedClient}
+                    onChange={(e) => setSelectedClient(e.target.value)}
+                    className="appearance-none bg-transparent text-sm font-bold text-slate-900 border-none focus:ring-0 cursor-pointer outline-none pl-3 pr-8 py-1.5 rounded-full hover:bg-white/80 transition-colors"
+                  >
+                    {uniqueClients.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-900 pointer-events-none" />
+                </div>
               </div>
             )}
           </div>
@@ -440,40 +472,48 @@ const App: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {[...viewData.clients].sort((a,b) => a.priceGap - b.priceGap).map(c => {
-                         const isUnderPriced = c.priceGap < 0;
-                         const gapPercent = c.idealRevenueBasedOnContract > 0 ? Math.abs(c.priceGap / c.idealRevenueBasedOnContract) : 0;
-                         let statusBadge = <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">Saudável</span>;
-                         
-                         if (isUnderPriced) {
-                            if (gapPercent > 0.3) statusBadge = <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-700">Crítico</span>;
-                            else if (gapPercent > 0.1) statusBadge = <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">Atenção</span>;
-                         }
-
-                         return (
-                          <tr 
-                            key={c.id} 
-                            onClick={() => setSelectedDetailClient(c)}
-                            className="group hover:bg-slate-50/80 cursor-pointer transition-colors"
-                          >
-                            <td className="px-6 py-4">
-                              <div className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{c.Cliente}</div>
-                              {c.Status_Cliente === 'Inativo' && <div className="text-[10px] text-rose-500">Inativo</div>}
-                            </td>
-                            <td className="px-6 py-4 text-center text-sm text-slate-600">{c.Conteudos_Contratados}</td>
-                            <td className="px-6 py-4 text-right text-sm font-medium text-slate-900">{formatCurrency(c.Receita_Liquida_Apos_Imposto_BRL)}</td>
-                            <td className="px-6 py-4 text-right text-sm bg-indigo-50/30 border-x border-indigo-50 group-hover:bg-indigo-100/50 transition-colors">
-                              <span className={`font-bold ${c.priceGap < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                {c.priceGap > 0 ? '+' : ''}{formatCurrency(c.priceGap)}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-right">{statusBadge}</td>
-                            <td className="px-6 py-4 text-right text-slate-300 group-hover:text-indigo-500">
-                               <MoreHorizontal size={16} />
-                            </td>
-                          </tr>
-                         );
-                      })}
+                      {viewData.clients.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                             Nenhum dado encontrado para {selectedMonth}.
+                          </td>
+                        </tr>
+                      ) : (
+                        [...viewData.clients].sort((a,b) => a.priceGap - b.priceGap).map(c => {
+                           const isUnderPriced = c.priceGap < 0;
+                           const gapPercent = c.idealRevenueBasedOnContract > 0 ? Math.abs(c.priceGap / c.idealRevenueBasedOnContract) : 0;
+                           let statusBadge = <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">Saudável</span>;
+                           
+                           if (isUnderPriced) {
+                              if (gapPercent > 0.3) statusBadge = <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-700">Crítico</span>;
+                              else if (gapPercent > 0.1) statusBadge = <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">Atenção</span>;
+                           }
+  
+                           return (
+                            <tr 
+                              key={c.id} 
+                              onClick={() => setSelectedDetailClient(c)}
+                              className="group hover:bg-slate-50/80 cursor-pointer transition-colors"
+                            >
+                              <td className="px-6 py-4">
+                                <div className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{c.Cliente}</div>
+                                {c.Status_Cliente === 'Inativo' && <div className="text-[10px] text-rose-500">Inativo</div>}
+                              </td>
+                              <td className="px-6 py-4 text-center text-sm text-slate-600">{c.Conteudos_Contratados}</td>
+                              <td className="px-6 py-4 text-right text-sm font-medium text-slate-900">{formatCurrency(c.Receita_Liquida_Apos_Imposto_BRL)}</td>
+                              <td className="px-6 py-4 text-right text-sm bg-indigo-50/30 border-x border-indigo-50 group-hover:bg-indigo-100/50 transition-colors">
+                                <span className={`font-bold ${c.priceGap < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                                  {c.priceGap > 0 ? '+' : ''}{formatCurrency(c.priceGap)}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-right">{statusBadge}</td>
+                              <td className="px-6 py-4 text-right text-slate-300 group-hover:text-indigo-500">
+                                 <MoreHorizontal size={16} />
+                              </td>
+                            </tr>
+                           );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
