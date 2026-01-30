@@ -32,7 +32,8 @@ const COLOR_COST = '#cbd5e1'; // Slate 300
 const COLOR_PROFIT_POS = '#10b981'; // Emerald 500
 const COLOR_PROFIT_NEG = '#f43f5e'; // Rose 500
 const COLOR_ACCENT = '#8b5cf6'; // Violet 500
-const GRADIENT_REV = 'url(#colorRev)';
+const COLOR_WARNING = '#fbbf24'; // Amber 400
+const COLOR_DANGER_SOFT = '#fda4af'; // Rose 300 (for backgrounds/secondary)
 
 // Helper to check data validity
 const isValidData = (data: any[]) => {
@@ -186,8 +187,10 @@ export const EfficiencyChart: React.FC<{ clients: ClientData[] }> = ({ clients }
           <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
           <Tooltip content={<CustomTooltip />} />
           <Legend />
+          {/* Delivered: Blue normally, but if low compared to contracted? Kept blue for delivered. */}
           <Bar dataKey="Conteudos_Entregues" name="Entregues" stackId="a" fill={COLOR_REV} radius={[0,0,4,4]} />
-          <Bar dataKey="Conteudos_Nao_Entregues" name="Não Entregues" stackId="a" fill="#e2e8f0" radius={[4,4,0,0]} />
+          {/* Not Delivered: Highlighted in Soft Red to indicate missed target */}
+          <Bar dataKey="Conteudos_Nao_Entregues" name="Não Entregues" stackId="a" fill={COLOR_DANGER_SOFT} radius={[4,4,0,0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -255,7 +258,16 @@ export const RealVsIdealChart: React.FC<{ clients: any[] }> = ({ clients }) => {
           <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b'}} tickFormatter={(v) => `R$${v/1000}k`} />
           <Tooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
           <Legend />
-          <Bar dataKey="Receita_Liquida_Apos_Imposto_BRL" name="Receita Real" fill={COLOR_REV} radius={[4,4,0,0]} barSize={12} />
+          {/* Real Revenue: Red if below Ideal (Target), Green/Blue if above */}
+          <Bar dataKey="Receita_Liquida_Apos_Imposto_BRL" name="Receita Real" radius={[4,4,0,0]} barSize={12}>
+            {sorted.map((entry, index) => (
+              <Cell 
+                key={`cell-${index}`} 
+                fill={entry.Receita_Liquida_Apos_Imposto_BRL < entry.idealRevenueBasedOnContract ? COLOR_PROFIT_NEG : COLOR_PROFIT_POS} 
+              />
+            ))}
+          </Bar>
+          {/* Ideal Revenue: Reference color */}
           <Bar dataKey="idealRevenueBasedOnContract" name="Receita Ideal (20% Margem)" fill={COLOR_ACCENT} radius={[4,4,0,0]} barSize={12} />
         </BarChart>
       </ResponsiveContainer>

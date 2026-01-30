@@ -24,7 +24,7 @@ const NavyText = ({ children, className = "" }: { children: React.ReactNode, cla
 interface ConfigurationsPanelProps {
   allClients: ClientData[];
   allCosts: CostData[];
-  months: string[];
+  months: string[]; // Still accepted but we will use generated ones for flexibility
   currentMonth: string;
   onApplyChanges?: (clients: ClientData[], costs: CostData[]) => void;
 }
@@ -41,6 +41,12 @@ const DEFAULT_SETTINGS: SystemSettings = {
   maxProductionCapacity: 140, // CORRECTED TO 140 (7 Clients * ~20 contents)
   manualCostPerContentOverride: 0
 };
+
+const SIM_MONTHS = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+const SIM_YEARS = Array.from({ length: 12 }, (_, i) => (2024 + i).toString());
 
 export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
   allClients,
@@ -61,6 +67,13 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
   const [isAddCostModalOpen, setIsAddCostModalOpen] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemValue, setNewItemValue] = useState(0);
+
+  // Split selectedMonth for internal state usage
+  const [selMonthName, selYear] = selectedMonth.includes('/') ? selectedMonth.split('/') : initialMonth.split('/');
+
+  const handleDateChange = (m: string, y: string) => {
+     setSelectedMonth(`${m}/${y}`);
+  };
 
   // Simulation State
   const [simulation, setSimulation] = useState<SimulationState>({
@@ -437,16 +450,28 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
              {/* LEFT: PERIOD & CAPACITY */}
              <div className="lg:col-span-1 space-y-6">
                  <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Mês de Referência</label>
-                    <div className="relative">
-                       <select 
-                         value={selectedMonth} 
-                         onChange={(e) => setSelectedMonth(e.target.value)}
-                         className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 font-bold text-lg rounded-xl py-3 pl-4 pr-10 outline-none focus:ring-2 focus:ring-indigo-500"
-                       >
-                         {months.map(m => <option key={m} value={m}>{m}</option>)}
-                       </select>
-                       <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                    <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Simular Período</label>
+                    <div className="flex gap-2">
+                       <div className="relative flex-1">
+                          <select 
+                            value={selMonthName} 
+                            onChange={(e) => handleDateChange(e.target.value, selYear)}
+                            className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 font-bold text-lg rounded-xl py-3 pl-4 pr-8 outline-none focus:ring-2 focus:ring-indigo-500"
+                          >
+                            {SIM_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                       </div>
+                       <div className="relative w-28">
+                          <select 
+                            value={selYear} 
+                            onChange={(e) => handleDateChange(selMonthName, e.target.value)}
+                            className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 font-bold text-lg rounded-xl py-3 pl-4 pr-8 outline-none focus:ring-2 focus:ring-indigo-500"
+                          >
+                            {SIM_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                       </div>
                     </div>
                  </div>
 
@@ -577,7 +602,13 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                  </tr>
                </thead>
                <tbody className="divide-y divide-slate-100">
-                 {simResult.clients.map(c => {
+                 {simResult.clients.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                         Nenhum cliente registrado neste mês. Adicione um abaixo.
+                      </td>
+                    </tr>
+                 ) : simResult.clients.map(c => {
                    const hasOverride = simulation.clients[selectedMonth]?.[c.id];
                    const isAdded = c.id.startsWith('new-');
                    return (
@@ -710,7 +741,13 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {simResult.costs.map(c => {
+                    {simResult.costs.length === 0 ? (
+                       <tr>
+                         <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                            Nenhum custo registrado neste mês. Adicione um abaixo.
+                         </td>
+                       </tr>
+                    ) : simResult.costs.map(c => {
                        const hasOverride = simulation.costs[selectedMonth]?.[c.id];
                        const isAdded = c.id.startsWith('new-');
                        return (

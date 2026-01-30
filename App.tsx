@@ -40,6 +40,9 @@ const STANDARD_MONTHS = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
 
+// Generate Years from 2024 to 2035
+const AVAILABLE_YEARS = Array.from({ length: 12 }, (_, i) => (2024 + i).toString());
+
 // --- SUB-COMPONENTS ---
 
 const SplashScreen = () => (
@@ -232,11 +235,14 @@ const App: React.FC = () => {
 
   // --- DERIVED STATE FOR FILTERS ---
   const [currentMonthName, currentYear] = selectedMonth.split('/');
-  const availableYears = useMemo(() => Array.from(new Set(MONTHS.map(m => m.split('/')[1]))).sort(), []);
+  
+  // Use generated years instead of existing data only
+  const availableYears = AVAILABLE_YEARS;
   const uniqueClients = ['Todos', ...Array.from(new Set(allClients.map(c => c.Cliente)))];
 
   // --- 1. PROCESSED DATA FOR SELECTED MONTH ---
   const monthlyMetrics = useMemo(() => {
+    // If month/year combo doesn't exist in data, these will be empty arrays (handled gracefully)
     const clients = allClients.filter(c => c.Mes_Referencia === selectedMonth);
     const costs = allCosts.filter(c => c.Mes_Referencia === selectedMonth && c.Ativo_no_Mes);
 
@@ -257,7 +263,7 @@ const App: React.FC = () => {
       totalOpCost, totalNonOpCost, totalLaborCost, totalCost, 
       totalDelivered, costPerContent 
     };
-  }, [selectedMonth, allClients, allCosts]); // Added dependencies
+  }, [selectedMonth, allClients, allCosts]);
 
   // --- 2. VIEW DATA (Filtered) ---
   const viewData = useMemo(() => {
@@ -322,14 +328,23 @@ const App: React.FC = () => {
 
   // --- 3. ANNUAL / LTV DATA ---
   const annualData = useMemo(() => {
-    const trend = MONTHS.map(month => {
+    // Collect all unique months from data plus selected month to ensure trend works even if data sparse
+    const dataMonths = Array.from(new Set(allClients.map(c => c.Mes_Referencia)));
+    if (!dataMonths.includes(selectedMonth)) dataMonths.push(selectedMonth);
+    
+    // Sort chronological helper (basic year/month sort)
+    const sortedMonths = dataMonths.sort((a,b) => {
+        const [ma, ya] = a.split('/');
+        const [mb, yb] = b.split('/');
+        if (ya !== yb) return parseInt(ya) - parseInt(yb);
+        return STANDARD_MONTHS.indexOf(ma) - STANDARD_MONTHS.indexOf(mb);
+    });
+
+    const trend = sortedMonths.map(month => {
       const mClients = allClients.filter(c => c.Mes_Referencia === month);
       const mCosts = allCosts.filter(c => c.Mes_Referencia === month && c.Ativo_no_Mes);
       
-      // Cost Logic for monthly calc
-      const opCosts = mCosts.filter(c => !isNonOperationalCost(c.Tipo_Custo, c.Tipo_Custo));
       const totalCost = mCosts.reduce((sum, c) => sum + c.Valor_Mensal_BRL, 0);
-
       const revenue = mClients.reduce((sum, c) => sum + c.Receita_Liquida_Apos_Imposto_BRL, 0);
       const profit = revenue - totalCost;
       const margin = revenue !== 0 ? profit / revenue : 0;
@@ -357,7 +372,7 @@ const App: React.FC = () => {
     const totalAnnualProfit = trend.reduce((s, m) => s + m.profit, 0);
 
     return { trend, ltvData, totalAnnualRevenue, totalAnnualCost, totalAnnualProfit };
-  }, [allClients, allCosts]); // Added dependencies
+  }, [allClients, allCosts, selectedMonth]);
 
   // --- 4. ADVANCED & GLOBAL ALERTS LOGIC (UPDATED) ---
   const detailedAlerts = useMemo(() => {
@@ -365,7 +380,7 @@ const App: React.FC = () => {
     
     // 1. GLOBAL MONTH ALERTS (Negative Margin)
     annualData.trend.forEach(m => {
-        if (m.margin < 0) {
+        if (m.margin < 0 && m.revenue > 0) { // Only alert if there is activity
             alerts.push({
                 type: 'critical',
                 title: 'Margem Negativa no Mês',
@@ -377,26 +392,24 @@ const App: React.FC = () => {
         }
     });
 
-    // 2. GLOBAL CLIENT ALERTS (Scan ALL clients across ALL months for specific losses)
-    // First, map cost per content for each month to be accurate
+    // 2. GLOBAL CLIENT ALERTS
     const costMap = new Map();
-    MONTHS.forEach(month => {
-       const mCosts = allCosts.filter(c => c.Mes_Referencia === month && c.Ativo_no_Mes && !isNonOperationalCost(c.Tipo_Custo, c.Tipo_Custo));
-       const mClients = allClients.filter(c => c.Mes_Referencia === month);
+    annualData.trend.forEach(trend => {
+       const mCosts = allCosts.filter(c => c.Mes_Referencia === trend.month && c.Ativo_no_Mes && !isNonOperationalCost(c.Tipo_Custo, c.Tipo_Custo));
+       const mClients = allClients.filter(c => c.Mes_Referencia === trend.month);
        
        const totalOpCost = mCosts.reduce((s, c) => s + c.Valor_Mensal_BRL, 0);
        const totalDelivered = mClients.reduce((s, c) => s + c.Conteudos_Entregues, 0);
        const unitCost = totalDelivered > 0 ? totalOpCost / totalDelivered : 0;
-       costMap.set(month, unitCost);
+       costMap.set(trend.month, unitCost);
     });
 
-    // Iterate ALL clients to find negative margin instances
     allClients.forEach(c => {
        const unitCost = costMap.get(c.Mes_Referencia) || 0;
        const allocatedCost = c.Conteudos_Entregues * unitCost;
        const profit = c.Receita_Liquida_Apos_Imposto_BRL - allocatedCost;
        
-       if (profit < 0) {
+       if (profit < 0 && c.Conteudos_Entregues > 0) {
           alerts.push({
             type: 'warning',
             title: 'Cliente com Prejuízo',
@@ -404,12 +417,11 @@ const App: React.FC = () => {
             value: formatCurrency(profit),
             desc: `Registrado em ${c.Mes_Referencia}. Receita inferior ao custo operacional de entrega (${c.Conteudos_Entregues} un).`,
             icon: TrendingDown,
-            isHistorical: c.Mes_Referencia !== selectedMonth // Flag if it's from history
+            isHistorical: c.Mes_Referencia !== selectedMonth
           });
        }
     });
 
-    // Sort: Critical first, then by value magnitude
     return alerts.sort((a,b) => {
         if(a.type === 'critical' && b.type !== 'critical') return -1;
         if(a.type !== 'critical' && b.type === 'critical') return 1;
@@ -421,7 +433,6 @@ const App: React.FC = () => {
   const handleApplyChanges = (newClients: ClientData[], newCosts: CostData[]) => {
       setAllClients(newClients);
       setAllCosts(newCosts);
-      // Optional: Add a toast notification here
       console.log("Applied changes to main App state");
   };
 
@@ -454,9 +465,8 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Filters - Responsive Grid/Flex */}
-            {activeTab !== 'annual' && activeTab !== 'alerts' && activeTab !== 'settings' && (
-              <div className="flex flex-wrap md:flex-nowrap items-center justify-center gap-2 bg-white/60 p-1.5 rounded-2xl border border-white/60 shadow-inner w-full md:w-auto">
+            {/* Global Filters - Visible on ALL tabs */}
+            <div className="flex flex-wrap md:flex-nowrap items-center justify-center gap-2 bg-white/60 p-1.5 rounded-2xl border border-white/60 shadow-inner w-full md:w-auto">
                 {/* Month Selector */}
                 <div className="relative group flex-1 md:flex-none">
                   <select 
@@ -496,8 +506,18 @@ const App: React.FC = () => {
                   </select>
                   <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-900 pointer-events-none" />
                 </div>
-              </div>
-            )}
+
+                <div className="hidden md:block h-4 w-px bg-slate-300"></div>
+
+                {/* Config Shortcut */}
+                <button 
+                  onClick={() => setActiveTab('settings')}
+                  className={`p-1.5 rounded-xl transition-colors ${activeTab === 'settings' ? 'bg-slate-800 text-white' : 'hover:bg-slate-200 text-slate-500'}`}
+                  title="Ir para Configurações"
+                >
+                   <Settings size={18} />
+                </button>
+            </div>
           </div>
 
           {/* Bottom Row: Tabs */}
@@ -579,7 +599,7 @@ const App: React.FC = () => {
                       {viewData.clients.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
-                             Nenhum dado encontrado para {selectedMonth}.
+                             Nenhum dado encontrado para {selectedMonth}. Vá em <strong>Configurações</strong> para adicionar.
                           </td>
                         </tr>
                       ) : (
