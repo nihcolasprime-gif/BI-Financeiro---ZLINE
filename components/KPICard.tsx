@@ -20,7 +20,7 @@ const KPICard: React.FC<KPICardProps> = ({
 }) => {
   // Styles configuration
   let theme = {
-    text: 'text-slate-700',
+    text: 'text-[#06283D]',
     iconBg: 'from-slate-700 to-slate-900',
     iconShadow: 'shadow-slate-500/20',
     accentLine: 'bg-slate-300',
@@ -50,33 +50,13 @@ const KPICard: React.FC<KPICardProps> = ({
     }
   } else if (colorCondition === 'cost-warning') {
     theme = {
-      text: 'text-slate-800',
+      text: 'text-[#06283D]',
       iconBg: 'from-amber-400 to-amber-600',
       iconShadow: 'shadow-amber-500/40',
       accentLine: 'bg-amber-400',
       glow: 'bg-amber-400/20',
       border: 'border-amber-100/60'
     };
-  } else if (colorCondition === 'alert-low') {
-    if (value < 0.2) {
-      theme = {
-        text: 'text-rose-700',
-        iconBg: 'from-rose-500 to-rose-700',
-        iconShadow: 'shadow-rose-500/30',
-        accentLine: 'bg-rose-400',
-        glow: 'bg-rose-400/10',
-        border: 'border-rose-100/60'
-      };
-    } else {
-      theme = {
-        text: 'text-emerald-700',
-        iconBg: 'from-emerald-500 to-emerald-700',
-        iconShadow: 'shadow-emerald-500/30',
-        accentLine: 'bg-emerald-400',
-        glow: 'bg-emerald-400/10',
-        border: 'border-emerald-100/60'
-      };
-    }
   }
 
   const formattedValue = () => {
@@ -104,10 +84,8 @@ const KPICard: React.FC<KPICardProps> = ({
         h-auto min-h-[140px] md:h-40
       `}
     >
-      {/* Background Glow */}
       <div className={`absolute -right-6 -top-6 w-32 h-32 rounded-full blur-3xl ${theme.glow} transition-all duration-500 pointer-events-none`}></div>
 
-      {/* Header */}
       <div className="flex justify-between items-start z-10 mb-4 md:mb-0">
         <div className="flex flex-col gap-1">
            <h3 className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest transition-colors group-hover:text-slate-500">{title}</h3>
@@ -127,9 +105,8 @@ const KPICard: React.FC<KPICardProps> = ({
         </div>
       </div>
       
-      {/* Value */}
       <div className="relative z-10 mt-auto">
-        <div className={`text-3xl md:text-3xl lg:text-4xl font-extrabold ${theme.text} tracking-tight drop-shadow-sm`} style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}>
+        <div className={`text-3xl md:text-3xl lg:text-4xl font-black ${theme.text} tracking-tighter drop-shadow-sm font-mono`}>
             {privacyMode ? (
               <span className="blur-md opacity-30 select-none grayscale">R$ 9.999</span>
             ) : (

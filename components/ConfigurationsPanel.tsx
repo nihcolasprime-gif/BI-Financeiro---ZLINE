@@ -1,898 +1,875 @@
-import React, { useState, useMemo, useEffect } from 'react';
+
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   Settings, Database, Calculator, Save, RefreshCw, 
   FileText, Lock, Edit3, AlertTriangle, Download, 
   CheckCircle, Shield, X, ChevronDown, ChevronRight,
   TrendingUp, TrendingDown, DollarSign, Users, RotateCcw,
-  Play, Plus, Trash2, History, AlertCircle, BarChart3, Battery
+  Plus, Trash2, History, AlertCircle, BarChart3, Battery,
+  Calendar as CalendarIcon, MinusCircle, Info, FileDown,
+  Printer, Loader2, Heart, Check, HelpCircle, Activity,
+  Landmark, Target
 } from 'lucide-react';
-import { ClientData, CostData } from '../types';
-import { 
-  calculateSimulation, 
-  generateAuditReport, 
-  SimulationState, 
-  SimulationEvent,
-  SystemSettings 
-} from '../utils/configAudit';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import { ClientData, CostData, GlobalSettings } from '../types';
 import { formatCurrency, formatPercent } from '../utils';
-
-// --- STYLES & HELPERS ---
-const NavyText = ({ children, className = "" }: { children: React.ReactNode, className?: string }) => (
-  <span className={`text-[#0f172a] ${className}`}>{children}</span>
-);
-
-// Mask helper for Config
-const MaskedValue = ({ value, privacyMode, format, className }: { value: any, privacyMode: boolean, format?: (v: any) => string, className?: string }) => {
-  if (privacyMode) return <span className={`blur-[4px] select-none bg-slate-200/50 rounded px-1 text-slate-400 ${className}`}>••••</span>;
-  return <span className={className}>{format ? format(value) : value}</span>;
-};
 
 interface ConfigurationsPanelProps {
   allClients: ClientData[];
   allCosts: CostData[];
   months: string[];
-  currentMonth: string;
-  onApplyChanges?: (clients: ClientData[], costs: CostData[]) => void;
+  settings: GlobalSettings;
+  onUpdateClients: (clients: ClientData[]) => void;
+  onUpdateCosts: (costs: CostData[]) => void;
+  onUpdateSettings: (settings: GlobalSettings) => void;
+  onUpdateMonths: (months: string[]) => void;
   privacyMode?: boolean;
 }
 
-const DEFAULT_SETTINGS: SystemSettings = {
-  taxRate: 0.10,
-  targetMargin: 0.20,
-  lerTarget: 3.0,
-  allocationMethod: 'perDelivered',
-  inflationFactor: 1.0,
-  seasonalMultiplier: 1.0,
-  tolerancePercentage: 0.01,
-  oneTimeAdjustments: 0,
-  maxProductionCapacity: 140, 
-  manualCostPerContentOverride: 0
-};
-
-const SIM_MONTHS = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-];
-const SIM_YEARS = Array.from({ length: 12 }, (_, i) => (2024 + i).toString());
+const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const YEARS = ['2024', '2025', '2026', '2027'];
 
 export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
-  allClients,
-  allCosts,
-  months,
-  currentMonth: initialMonth,
-  onApplyChanges,
+  allClients, allCosts, months, settings,
+  onUpdateClients, onUpdateCosts, onUpdateSettings, onUpdateMonths,
   privacyMode = false
 }) => {
-  // --- STATE ---
-  const [selectedMonth, setSelectedMonth] = useState(initialMonth);
-  const [mode, setMode] = useState<'simulation' | 'readonly'>('simulation');
-  const [expandedSection, setExpandedSection] = useState<string | null>('clients');
-  const [applyStep, setApplyStep] = useState<0 | 1 | 2>(0); 
-  const [applyInput, setApplyInput] = useState('');
-  
-  // Modals
-  const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
-  const [isAddCostModalOpen, setIsAddCostModalOpen] = useState(false);
-  const [newItemName, setNewItemName] = useState('');
-  const [newItemValue, setNewItemValue] = useState(0);
+  const [selectedMonth, setSelectedMonth] = useState(months[months.length - 1]);
+  const [activeSection, setActiveSection] = useState<'clients' | 'costs' | 'global'>('clients');
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
-  // Split selectedMonth for internal state usage
-  const [selMonthName, selYear] = selectedMonth.includes('/') ? selectedMonth.split('/') : initialMonth.split('/');
+  // Modal states
+  const [isAddMonthOpen, setIsAddMonthOpen] = useState(false);
+  const [isAddClientOpen, setIsAddClientOpen] = useState(false);
+  const [isAddCostOpen, setIsAddCostOpen] = useState(false);
 
-  const handleDateChange = (m: string, y: string) => {
-     setSelectedMonth(`${m}/${y}`);
-  };
+  // New month input
+  const [newMonthName, setNewMonthName] = useState(MONTH_NAMES[0]);
+  const [newMonthYear, setNewMonthYear] = useState(YEARS[1]);
 
-  // Simulation State logic remains same...
-  const [simulation, setSimulation] = useState<SimulationState>({
-    clients: {},
-    costs: {},
-    addedClients: [],
-    addedCosts: [],
-    deletedClientIds: [],
-    deletedCostIds: [],
-    global: { ...DEFAULT_SETTINGS }
-  });
+  const monthClients = allClients.filter(c => c.Mes_Referencia === selectedMonth);
+  const monthCosts = allCosts.filter(c => c.Mes_Referencia === selectedMonth);
 
-  const [events, setEvents] = useState<SimulationEvent[]>([]);
-  const [snapshotId] = useState(`SIM-${new Date().toISOString().replace(/[-:T.]/g,'').slice(0,14)}`);
-  const currentUser = { id: 'usr-1', name: 'Admin User' };
+  // --- COMPREHENSIVE HEALTH VALIDATION ENGINE ---
+  const validation = useMemo(() => {
+    const grossRevenue = monthClients.reduce((s, c) => s + (c.Receita_Mensal_BRL || 0), 0);
+    const netRevenue = grossRevenue * (1 - settings.taxRate);
+    const totalCost = monthCosts.filter(c => c.Ativo_no_Mes).reduce((s, c) => s + (c.Valor_Mensal_BRL || 0), 0);
+    const totalContracted = monthClients.reduce((s, c) => s + (c.Conteudos_Contratados || 0), 0);
+    const totalDelivered = monthClients.reduce((s, c) => s + (c.Conteudos_Entregues || 0), 0);
+    
+    // --- ROBUST CAPACITY CALCULATION ---
+    const capacityLimit = settings.maxProductionCapacity || 0;
+    const utilization = capacityLimit > 0 ? totalContracted / capacityLimit : (totalContracted > 0 ? 1 : 0);
 
-  // --- CALCULATIONS ---
-  const simResult = useMemo(() => 
-    calculateSimulation(selectedMonth, allClients, allCosts, simulation), 
-  [selectedMonth, allClients, allCosts, simulation]);
+    const profit = netRevenue - totalCost;
+    const margin = netRevenue > 0 ? profit / netRevenue : 0;
+    const operationalCosts = monthCosts.filter(c => c.Ativo_no_Mes && (c.Categoria === 'Operacional' || !c.Categoria)).reduce((s, c) => s + c.Valor_Mensal_BRL, 0);
+    const costPerContent = totalDelivered > 0 ? operationalCosts / totalDelivered : 0;
 
-  const realResult = useMemo(() => 
-    calculateSimulation(selectedMonth, allClients, allCosts, {
-      clients: {}, costs: {}, addedClients: [], addedCosts: [], deletedClientIds: [], deletedCostIds: [], global: DEFAULT_SETTINGS
-    }), 
-  [selectedMonth, allClients, allCosts]);
+    const issues: { type: 'error' | 'warning', msg: string, category: 'financeiro' | 'capacidade' | 'dados' | 'global' }[] = [];
 
-  // --- ACTIONS ... (Same as before) ---
-  const logEvent = (
-    targetType: SimulationEvent['targetType'],
-    field: string,
-    oldValue: any,
-    newValue: any,
-    targetId?: string,
-    note?: string
-  ) => {
-    const newEvent: SimulationEvent = {
-      id: `evt-${Date.now()}`,
-      ts: new Date().toISOString(),
-      userId: currentUser.id,
-      targetType,
-      targetId,
-      month: selectedMonth,
-      field,
-      oldValue,
-      newValue,
-      note
+    // 1. Global Parameter Validation
+    if (settings.taxRate < 0) {
+      issues.push({ type: 'error', msg: 'Taxa de imposto negativa detectada. Corrija nos parâmetros globais.', category: 'global' });
+    } else if (settings.taxRate === 0) {
+      issues.push({ type: 'warning', msg: 'Taxa de imposto configurada como 0%. Verifique se a agência é isenta.', category: 'global' });
+    }
+
+    if (settings.targetMargin <= 0) {
+      issues.push({ type: 'error', msg: 'Meta de margem não pode ser zero ou negativa.', category: 'global' });
+    }
+
+    if (capacityLimit <= 0) {
+      issues.push({ type: 'error', msg: 'Capacidade nominal da agência está zerada. O sistema não pode validar a ocupação do time.', category: 'global' });
+    }
+
+    // 2. Financial Health Checks
+    if (margin < 0 && netRevenue > 0) {
+      issues.push({ type: 'error', msg: `Margem negativa (${formatPercent(margin)}). Operação gerando prejuízo no mês.`, category: 'financeiro' });
+    } else if (margin > 0 && margin < settings.targetMargin) {
+      issues.push({ type: 'warning', msg: `Margem (${formatPercent(margin)}) abaixo da meta global de ${formatPercent(settings.targetMargin)}.`, category: 'financeiro' });
+    }
+    
+    // 3. Production Capacity Checks (CRITICAL)
+    if (utilization > 1) {
+      issues.push({ 
+        type: 'error', 
+        msg: `Capacidade máxima estourada (${formatPercent(utilization)}). O volume contratado de ${totalContracted} un excede o teto operacional de ${capacityLimit} un.`, 
+        category: 'capacidade' 
+      });
+    } else if (utilization > 0.85) {
+      issues.push({ 
+        type: 'warning', 
+        msg: `Utilização de carga crítica (${formatPercent(utilization)}). Operação em risco de atrasos ou queda de qualidade.`, 
+        category: 'capacidade' 
+      });
+    }
+
+    // 4. Data Integrity
+    const activeClientsNoRevenue = monthClients.filter(c => c.Status_Cliente === 'Ativo' && (c.Receita_Mensal_BRL || 0) === 0);
+    if (activeClientsNoRevenue.length > 0) {
+      issues.push({ type: 'warning', msg: `${activeClientsNoRevenue.length} cliente(s) ativo(s) com faturamento zerado (Permuta ou erro).`, category: 'dados' });
+    }
+
+    const bleedingClients = monthClients.filter(c => {
+      const clientNet = c.Receita_Mensal_BRL * (1 - settings.taxRate);
+      const clientCost = c.Conteudos_Entregues * costPerContent;
+      return (clientNet - clientCost) < -1 && c.Conteudos_Entregues > 0;
+    });
+
+    if (bleedingClients.length > 0) {
+      issues.push({ type: 'error', msg: `${bleedingClients.length} contrato(s) deficitário(s): O custo de entrega supera a receita líquida.`, category: 'financeiro' });
+    }
+
+    return {
+      grossRevenue, netRevenue, totalCost, profit, margin, utilization, totalContracted, issues,
+      formulas: {
+        receitaLiquida: `${formatCurrency(grossRevenue)} * (1 - ${settings.taxRate}) = ${formatCurrency(netRevenue)}`,
+        lucro: `${formatCurrency(netRevenue)} - ${formatCurrency(totalCost)} = ${formatCurrency(profit)}`,
+        margem: `${formatCurrency(profit)} / ${formatCurrency(netRevenue)} = ${formatPercent(margin)}`,
+        utilizacao: `${totalContracted} un / ${capacityLimit} un = ${formatPercent(utilization)}`
+      }
     };
-    setEvents(prev => [...prev, newEvent]);
+  }, [monthClients, monthCosts, settings]);
+
+  const handleUpdateClient = (id: string, field: keyof ClientData, value: any) => {
+    const updated = allClients.map(c => c.id === id ? { ...c, [field]: value } : c);
+    onUpdateClients(updated);
   };
 
-  const handleGlobalChange = (field: keyof SystemSettings, value: any) => {
-    if (mode === 'readonly') return;
-    const oldValue = simulation.global[field];
-    logEvent('setting', field, oldValue, value, undefined, 'Global parameter change');
-    setSimulation(prev => ({
-      ...prev,
-      global: { ...prev.global, [field]: value }
-    }));
-  };
-
-  const handleClientChange = (clientId: string, field: keyof ClientData, value: any) => {
-    if (mode === 'readonly') return;
-    const originalClient = allClients.find(c => c.id === clientId) || simulation.addedClients.find(c => c.id === clientId);
-    const prevOverride = simulation.clients[selectedMonth]?.[clientId]?.[field];
-    const oldValue = prevOverride !== undefined ? prevOverride : originalClient?.[field];
-
-    logEvent('clientMonthly', field, oldValue, value, clientId);
-
-    setSimulation(prev => ({
-      ...prev,
-      clients: {
-        ...prev.clients,
-        [selectedMonth]: {
-          ...(prev.clients[selectedMonth] || {}),
-          [clientId]: {
-            ...(prev.clients[selectedMonth]?.[clientId] || {}),
-            [field]: value
-          }
-        }
-      }
-    }));
-  };
-
-  const handleCostChange = (costId: string, field: keyof CostData, value: any) => {
-    if (mode === 'readonly') return;
-    const originalCost = allCosts.find(c => c.id === costId) || simulation.addedCosts.find(c => c.id === costId);
-    const prevOverride = simulation.costs[selectedMonth]?.[costId]?.[field];
-    const oldValue = prevOverride !== undefined ? prevOverride : originalCost?.[field];
-
-    logEvent('costMonthly', field, oldValue, value, costId);
-
-    setSimulation(prev => ({
-      ...prev,
-      costs: {
-        ...prev.costs,
-        [selectedMonth]: {
-          ...(prev.costs[selectedMonth] || {}),
-          [costId]: {
-            ...(prev.costs[selectedMonth]?.[costId] || {}),
-            [field]: value
-          }
-        }
-      }
-    }));
-  };
-
-  const handleAddClient = () => {
-      const newId = `new-client-${Date.now()}`;
-      const newClient: ClientData = {
-          id: newId,
-          Cliente: newItemName || 'Novo Cliente',
-          Mes_Referencia: selectedMonth,
-          Status_Cliente: 'Ativo',
-          Receita_Mensal_BRL: newItemValue,
-          Conteudos_Contratados: 10,
-          Conteudos_Entregues: 10,
-          Conteudos_Nao_Entregues: 0,
-          Receita_Liquida_Apos_Imposto_BRL: newItemValue * (1 - simulation.global.taxRate)
-      };
-
-      setSimulation(prev => ({
-          ...prev,
-          addedClients: [...prev.addedClients, newClient]
-      }));
-      logEvent('add', 'create', null, newClient.Cliente, newId, 'Created new client');
-      setIsAddClientModalOpen(false);
-      setNewItemName('');
-      setNewItemValue(0);
-  };
-
-  const handleAddCost = () => {
-      const newId = `new-cost-${Date.now()}`;
-      const newCost: CostData = {
-          id: newId,
-          Tipo_Custo: newItemName || 'Novo Custo',
-          Mes_Referencia: selectedMonth,
-          Valor_Mensal_BRL: newItemValue,
-          Ativo_no_Mes: true
-      };
-
-      setSimulation(prev => ({
-          ...prev,
-          addedCosts: [...prev.addedCosts, newCost]
-      }));
-      logEvent('add', 'create', null, newCost.Tipo_Custo, newId, 'Created new cost');
-      setIsAddCostModalOpen(false);
-      setNewItemName('');
-      setNewItemValue(0);
-  };
-
-  const handleDelete = (type: 'client' | 'cost', id: string) => {
-      if(!confirm("Tem certeza que deseja remover este item da simulação?")) return;
-      if (type === 'client') {
-          setSimulation(prev => ({ ...prev, deletedClientIds: [...prev.deletedClientIds, id] }));
-          logEvent('delete', 'status', 'active', 'deleted', id);
-      } else {
-          setSimulation(prev => ({ ...prev, deletedCostIds: [...prev.deletedCostIds, id] }));
-          logEvent('delete', 'status', 'active', 'deleted', id);
-      }
-  };
-
-  const executeApply = () => {
-      const finalClients = [...allClients, ...simulation.addedClients].filter(c => !simulation.deletedClientIds.includes(c.id));
-      const appliedClients = finalClients.map(c => {
-          const override = simulation.clients[c.Mes_Referencia]?.[c.id];
-          if (override) {
-             const netRev = (override.Receita_Mensal_BRL !== undefined ? override.Receita_Mensal_BRL : c.Receita_Mensal_BRL) * (1 - simulation.global.taxRate);
-             return { ...c, ...override, Receita_Liquida_Apos_Imposto_BRL: netRev };
-          }
-          return c;
-      });
-
-      const finalCosts = [...allCosts, ...simulation.addedCosts].filter(c => !simulation.deletedCostIds.includes(c.id));
-      const appliedCosts = finalCosts.map(c => {
-          const override = simulation.costs[c.Mes_Referencia]?.[c.id];
-          return override ? { ...c, ...override } : c;
-      });
-
-      if (onApplyChanges) {
-          onApplyChanges(appliedClients, appliedCosts);
-      }
-
-      setSimulation({ 
-          clients: {}, costs: {}, 
-          addedClients: [], addedCosts: [], 
-          deletedClientIds: [], deletedCostIds: [], 
-          global: { ...DEFAULT_SETTINGS, maxProductionCapacity: simulation.global.maxProductionCapacity } 
-      });
-      setEvents([]);
-      setApplyStep(0);
-      setApplyInput('');
-      alert("Alterações aplicadas com sucesso!");
-  };
-
-  const downloadAudit = () => {
-    const report = generateAuditReport(
-      snapshotId, 
-      currentUser, 
-      selectedMonth, 
-      allClients, 
-      allCosts, 
-      simulation, 
-      events, 
-      realResult.kpis
-    );
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `audit_${snapshotId}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const resetSimulation = () => {
-    if (confirm("Descartar todas as simulações e eventos?")) {
-      setSimulation({ clients: {}, costs: {}, addedClients: [], addedCosts: [], deletedClientIds: [], deletedCostIds: [], global: { ...DEFAULT_SETTINGS } });
-      setEvents([]);
+  const handleDeleteClient = (id: string) => {
+    if (confirm("Deseja remover este cliente permanentemente?")) {
+      onUpdateClients(allClients.filter(c => c.id !== id));
     }
   };
 
-  const DiffBadge = ({ real, sim, type = 'currency' }: { real: number, sim: number, type?: 'currency'|'percent'|'number'|'cost' }) => {
-    const diff = sim - real;
-    const pct = real !== 0 ? diff / real : 0;
-    
-    if (Math.abs(diff) < 0.01) return null;
-
-    const isPositiveGood = type !== 'cost'; 
-    
-    let colorClass = '';
-    if (diff > 0) {
-        colorClass = isPositiveGood ? 'text-emerald-600' : 'text-rose-600';
-    } else {
-        colorClass = isPositiveGood ? 'text-rose-600' : 'text-emerald-600';
-    }
-    
-    const sign = diff > 0 ? '+' : '';
-    
-    const fmt = (v: number) => 
-      type === 'currency' || type === 'cost' ? formatCurrency(v) : 
-      type === 'percent' ? formatPercent(v) : 
-      v.toFixed(0);
-
-    return (
-      <div className={`text-[10px] font-bold flex items-center gap-1 ${colorClass} bg-white/60 backdrop-blur-sm px-1.5 py-0.5 rounded-full border border-slate-100`}>
-        <span>{sign}{fmt(diff)}</span>
-        <span className="opacity-75">({sign}{(pct*100).toFixed(1)}%)</span>
-      </div>
-    );
+  const handleUpdateCost = (id: string, field: keyof CostData, value: any) => {
+    const updated = allCosts.map(c => c.id === id ? { ...c, [field]: value } : c);
+    onUpdateCosts(updated);
   };
 
-  const toggleSection = (sec: string) => setExpandedSection(expandedSection === sec ? null : sec);
+  const handleDeleteCost = (id: string) => {
+    if (confirm("Deseja remover este custo permanentemente?")) {
+      onUpdateCosts(allCosts.filter(c => c.id !== id));
+    }
+  };
 
-  // --- RENDER ---
+  const handleAddMonth = () => {
+    const newMonth = `${newMonthName}/${newMonthYear}`;
+    if (months.includes(newMonth)) return alert("Mês já existe.");
+    onUpdateMonths([...months, newMonth]);
+    setSelectedMonth(newMonth);
+    setIsAddMonthOpen(false);
+  };
+
+  const handleAddClient = (name: string, contracted: number, revenue: number) => {
+    const newClient: ClientData = {
+      id: `c-${Date.now()}`,
+      Cliente: name || 'Novo Cliente',
+      Mes_Referencia: selectedMonth,
+      Status_Cliente: 'Ativo',
+      Receita_Mensal_BRL: revenue,
+      Conteudos_Contratados: contracted,
+      Conteudos_Entregues: 0,
+      Conteudos_Nao_Entregues: 0,
+      Receita_Liquida_Apos_Imposto_BRL: revenue * (1 - settings.taxRate)
+    };
+    onUpdateClients([...allClients, newClient]);
+    setIsAddClientOpen(false);
+  };
+
+  const handleAddCost = (name: string, value: number, tipo: CostData['Tipo'], categoria: CostData['Categoria']) => {
+    const newCost: CostData = {
+      id: `cost-${Date.now()}`,
+      Tipo_Custo: name || 'Nova Despesa',
+      Mes_Referencia: selectedMonth,
+      Valor_Mensal_BRL: value,
+      Ativo_no_Mes: true,
+      Tipo: tipo || 'Fixo',
+      Categoria: categoria || 'Operacional'
+    };
+    onUpdateCosts([...allCosts, newCost]);
+    setIsAddCostOpen(false);
+  };
+
+  const generatePDFReport = async () => {
+    if (!reportRef.current) return;
+    setIsGeneratingPDF(true);
+    try {
+      const element = reportRef.current;
+      element.style.display = 'block';
+      const canvas = await html2canvas(element, { scale: 2, logging: false, useCORS: true });
+      element.style.display = 'none';
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Auditoria_Financeira_${selectedMonth.replace('/', '_')}.pdf`);
+    } catch (error) {
+      console.error('PDF Generation failed:', error);
+      alert('Erro ao gerar o PDF. Tente novamente.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const hasGlobalIssue = (param: 'taxRate' | 'targetMargin' | 'maxCapacity') => {
+    return validation.issues.some(issue => {
+      if (param === 'taxRate' && issue.msg.toLowerCase().includes('imposto')) return true;
+      if (param === 'targetMargin' && (issue.msg.toLowerCase().includes('margem') && issue.category === 'global')) return true;
+      if (param === 'maxCapacity' && (issue.msg.toLowerCase().includes('capacidade') && issue.category === 'global')) return true;
+      return false;
+    });
+  };
+
   return (
-    <div className="space-y-6 md:space-y-8 pb-24 relative">
+    <div className="space-y-6 pb-20">
       <style>{`
-        .navy-num { color: #0f172a; font-family: 'JetBrains Mono', monospace; font-weight: 600; }
-        .input-sim { 
-          background: #ffffff; 
-          border: 1px solid #e2e8f0; 
-          border-radius: 8px; 
-          padding: 6px 8px; 
-          font-weight: 600; 
-          color: #334155; 
-          width: 100%; 
-          font-size: 14px;
-          transition: all 0.2s;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        }
-        .input-sim:focus { 
-          outline: none; 
-          border-color: #6366f1; 
-          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); 
-        }
-        .input-sim:disabled { 
-          opacity: 0.7; 
-          cursor: not-allowed; 
-          background: #f8fafc; 
-        }
-        .privacy-blur { filter: blur(5px); opacity: 0.7; }
-        .input-bare {
-          background: transparent;
-          border: none;
-          border-bottom: 2px solid transparent;
-          border-radius: 0;
-          padding: 4px 0;
-          transition: border-color 0.2s;
-        }
-        .input-bare:focus {
-          outline: none;
-          box-shadow: none;
-          border-bottom-color: #6366f1;
-        }
+        .input-money { color: #06283D; font-family: 'JetBrains Mono', monospace; font-weight: 700; border-bottom: 2px solid transparent; background: transparent; width: 100%; text-align: right; outline: none; transition: border-color 0.2s; }
+        .input-money:focus { border-bottom-color: #6366f1; }
+        .input-text-edit { background: transparent; border: none; border-bottom: 1px solid transparent; outline: none; font-weight: inherit; color: inherit; width: 100%; }
+        .input-text-edit:focus { border-bottom-color: #6366f1; }
+        .text-navy-800 { color: #06283D; }
+        .pdf-report-template { width: 210mm; background: white; padding: 20mm; color: #1e293b; font-family: 'Plus Jakarta Sans', sans-serif; display: none; position: absolute; left: -9999px; }
+        .pdf-section-title { font-size: 14pt; font-weight: 800; color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; margin-bottom: 12px; margin-top: 24px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .pdf-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        .pdf-table th { text-align: left; font-size: 9pt; color: #64748b; text-transform: uppercase; padding: 8px; border-bottom: 1px solid #f1f5f9; }
+        .pdf-table td { font-size: 10pt; padding: 8px; border-bottom: 1px solid #f8fafc; }
+        .pdf-kpi-box { border: 1px solid #f1f5f9; background: #f8fafc; padding: 12px; border-radius: 8px; text-align: center; }
+        .pdf-kpi-label { font-size: 8pt; color: #94a3b8; text-transform: uppercase; font-weight: bold; }
+        .pdf-kpi-value { font-size: 14pt; font-weight: 800; color: #1e293b; }
       `}</style>
 
-      {/* HEADER */}
-      <div className="glass-panel p-4 md:p-6 rounded-2xl md:rounded-[32px] shadow-lg shadow-slate-200/50 flex flex-col justify-between items-start gap-4">
-         <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex items-center gap-3 mb-2">
-               <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 border border-indigo-100">
-                  <Settings size={24} />
+      {/* HIDDEN PDF TEMPLATE */}
+      <div ref={reportRef} className="pdf-report-template">
+         <div className="flex justify-between items-center border-b-2 border-slate-900 pb-4 mb-8">
+            <div>
+               <h1 className="text-3xl font-black text-slate-900 tracking-tighter">ZLINE</h1>
+               <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Relatório de Auditoria Operacional</p>
+            </div>
+            <div className="text-right">
+               <p className="text-sm font-bold text-slate-900">{selectedMonth}</p>
+               <p className="text-[10px] text-slate-400">Gerado em: {new Date().toLocaleString('pt-BR')}</p>
+            </div>
+         </div>
+
+         <div className="pdf-section-title">Resumo Executivo</div>
+         <div className="grid grid-cols-4 gap-4 mb-8">
+            <div className="pdf-kpi-box">
+               <p className="pdf-kpi-label">Receita Bruta</p>
+               <p className="pdf-kpi-value">{formatCurrency(validation.grossRevenue)}</p>
+            </div>
+            <div className="pdf-kpi-box">
+               <p className="pdf-kpi-label">Resultado Líquido</p>
+               <p className={`pdf-kpi-value ${validation.profit < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{formatCurrency(validation.profit)}</p>
+            </div>
+            <div className="pdf-kpi-box">
+               <p className="pdf-kpi-label">Margem Real</p>
+               <p className="pdf-kpi-value">{formatPercent(validation.margin)}</p>
+            </div>
+            <div className="pdf-kpi-box">
+               <p className="pdf-kpi-label">Utilização</p>
+               <p className="pdf-kpi-value">{formatPercent(validation.utilization)}</p>
+            </div>
+         </div>
+
+         {validation.issues.length > 0 && (
+           <>
+            <div className="pdf-section-title">Alertas de Auditoria</div>
+            <div className="space-y-2 mb-8">
+               {validation.issues.map((issue, idx) => (
+                 <div key={idx} className={`p-3 rounded-lg text-sm border flex items-center gap-3 ${issue.type === 'error' ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-amber-50 border-amber-100 text-amber-700'}`}>
+                    <span className="font-bold uppercase text-[10px]">{issue.type}</span>
+                    <span>{issue.msg}</span>
+                 </div>
+               ))}
+            </div>
+           </>
+         )}
+
+         <div className="pdf-section-title">Detalhamento de Clientes</div>
+         <table className="pdf-table">
+            <thead>
+               <tr>
+                  <th>Cliente</th>
+                  <th>Status</th>
+                  <th>Contratado</th>
+                  <th>Entregue</th>
+                  <th className="text-right">Receita Bruta</th>
+               </tr>
+            </thead>
+            <tbody>
+               {monthClients.map(c => (
+                 <tr key={c.id}>
+                    <td className="font-bold">{c.Cliente}</td>
+                    <td>{c.Status_Cliente}</td>
+                    <td className="text-center">{c.Conteudos_Contratados}</td>
+                    <td className="text-center">{c.Conteudos_Entregues}</td>
+                    <td className="text-right font-mono font-bold">{formatCurrency(c.Receita_Mensal_BRL)}</td>
+                 </tr>
+               ))}
+            </tbody>
+         </table>
+
+         <div className="pdf-section-title">Detalhamento de Custos</div>
+         <table className="pdf-table">
+            <thead>
+               <tr>
+                  <th>Descrição</th>
+                  <th>Tipo</th>
+                  <th>Categoria</th>
+                  <th>Status</th>
+                  <th className="text-right">Valor</th>
+               </tr>
+            </thead>
+            <tbody>
+               {monthCosts.map(c => (
+                 <tr key={c.id}>
+                    <td className="font-bold">{c.Tipo_Custo}</td>
+                    <td>{c.Tipo || 'Fixo'}</td>
+                    <td>{c.Categoria || 'Operacional'}</td>
+                    <td>{c.Ativo_no_Mes ? 'Ativo' : 'Inativo'}</td>
+                    <td className="text-right font-mono font-bold">{formatCurrency(c.Valor_Mensal_BRL)}</td>
+                 </tr>
+               ))}
+            </tbody>
+         </table>
+
+         <div className="pdf-section-title">Fórmulas Aplicadas</div>
+         <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 font-mono text-[10px] space-y-2">
+            <p><strong>Receita Líquida:</strong> {validation.formulas.receitaLiquida}</p>
+            <p><strong>Lucro Líquido:</strong> {validation.formulas.lucro}</p>
+            <p><strong>Margem de Operação:</strong> {validation.formulas.margem}</p>
+            <p><strong>Taxa de Ocupação:</strong> {validation.formulas.utilizacao}</p>
+         </div>
+
+         <div className="mt-12 pt-4 border-t border-slate-200 flex justify-between items-center opacity-50">
+            <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400">BI Financeiro - ZLINE Enterprise v3.0</p>
+            <p className="text-[10px] text-slate-400">Documento Confidencial</p>
+         </div>
+      </div>
+
+      {/* HEADER CONTROLS */}
+      <div className="glass-panel p-6 rounded-[32px] flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 shadow-sm border border-indigo-100/50"><Settings size={24} /></div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Cérebro do Sistema</h2>
+            <p className="text-xs text-slate-500 font-medium">Controle total de parâmetros, auditoria e exportação.</p>
+          </div>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+             <button onClick={() => setActiveSection('clients')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeSection === 'clients' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>Clientes</button>
+             <button onClick={() => setActiveSection('costs')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeSection === 'costs' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>Custos</button>
+             <button onClick={() => setActiveSection('global')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeSection === 'global' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>Global</button>
+          </div>
+          
+          <button 
+            onClick={generatePDFReport}
+            disabled={isGeneratingPDF}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-200 hover:shadow-indigo-300 transition-all disabled:opacity-50"
+          >
+            {isGeneratingPDF ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />}
+            {isGeneratingPDF ? 'Compilando...' : 'Gerar Relatório PDF'}
+          </button>
+        </div>
+      </div>
+
+      {/* HEALTH DASHBOARD SECTION - OBJECTIVE: ENHANCED VISUAL KPIs */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
+         <div className="lg:col-span-2 space-y-6">
+            <div className="glass-panel p-6 rounded-[32px] border-l-4 border-l-indigo-500">
+               <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                     <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600"><Shield size={20} /></div>
+                     <div>
+                        <h3 className="font-bold text-slate-800">Check-up de Saúde: {selectedMonth}</h3>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Monitoramento de Capacidade & Dados</p>
+                     </div>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${validation.issues.length > 0 ? (validation.issues.some(i => i.type === 'error') ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700') : 'bg-emerald-100 text-emerald-700'}`}>
+                     {validation.issues.length} {validation.issues.length === 1 ? 'Ocorrência' : 'Ocorrências'}
+                  </div>
                </div>
+               
+               <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 no-scrollbar">
+                  {validation.issues.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 space-y-3 bg-emerald-50/30 rounded-[24px] border border-dashed border-emerald-200">
+                       <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shadow-sm"><Check size={24} /></div>
+                       <div className="text-center">
+                          <p className="font-bold text-emerald-800">Operação em Conformidade</p>
+                          <p className="text-xs text-emerald-600/80 max-w-xs mx-auto">Não foram detectados desvios financeiros ou de capacidade para o período selecionado.</p>
+                       </div>
+                    </div>
+                  ) : (
+                    validation.issues.map((issue, idx) => (
+                      <div key={idx} className={`group flex items-start gap-4 p-4 rounded-2xl border transition-all ${issue.type === 'error' ? 'bg-rose-50 border-rose-100 text-rose-700 hover:bg-rose-100/50' : 'bg-amber-50 border-amber-100 text-amber-700 hover:bg-amber-100/50'}`}>
+                         <div className={`mt-0.5 p-2 rounded-lg shrink-0 ${issue.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                            {issue.type === 'error' ? <AlertCircle size={18} /> : <AlertTriangle size={18} />}
+                         </div>
+                         <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                               <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-white/60">{issue.category}</span>
+                               <span className="text-[9px] font-black uppercase tracking-widest">{issue.type === 'error' ? 'Crítico' : 'Alerta'}</span>
+                            </div>
+                            <p className="text-sm font-semibold leading-relaxed">{issue.msg}</p>
+                         </div>
+                      </div>
+                    ))
+                  )}
+               </div>
+            </div>
+
+            {/* CAPACITY KPIs - OBJECTIVE: KPI VISUAL CORRECT DISPLAY */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="glass-panel p-4 rounded-[24px] text-center space-y-1 group transition-all">
+                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Carga Nominal</p>
+                   <div className="flex items-center justify-center gap-1">
+                      <Battery size={14} className="text-indigo-500" />
+                      <p className="text-xl font-black font-mono text-slate-800">{settings.maxProductionCapacity}</p>
+                      <span className="text-[10px] text-slate-400 font-bold">un</span>
+                   </div>
+                </div>
+                <div className="glass-panel p-4 rounded-[24px] text-center space-y-1">
+                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume Atual</p>
+                   <div className="flex items-center justify-center gap-1">
+                      <Activity size={14} className="text-slate-400" />
+                      <p className="text-xl font-black font-mono text-slate-800">{validation.totalContracted}</p>
+                      <span className="text-[10px] text-slate-400 font-bold">un</span>
+                   </div>
+                </div>
+                <div className="glass-panel p-4 rounded-[24px] text-center space-y-1">
+                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Uso de Time</p>
+                   <p className={`text-xl font-black font-mono ${validation.utilization > 1 ? 'text-rose-600' : 'text-slate-800'}`}>{formatPercent(validation.utilization)}</p>
+                </div>
+                <div className="glass-panel p-4 rounded-[24px] text-center space-y-1">
+                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Margem Real</p>
+                   <p className={`text-xl font-black font-mono ${validation.margin < 0 ? 'text-rose-600' : 'text-slate-800'}`}>{formatPercent(validation.margin)}</p>
+                </div>
+            </div>
+         </div>
+
+         {/* FORMULA INSPECTOR */}
+         <div className="glass-panel p-6 rounded-[32px] space-y-6">
+            <div className="flex items-center gap-2">
+               <div className="p-2 bg-slate-100 rounded-xl text-slate-600"><Calculator size={20} /></div>
                <div>
-                 <h2 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">Configurações & Auditoria</h2>
-                 <p className="text-xs text-slate-500 font-medium">Controle total sobre parâmetros de simulação</p>
+                  <h3 className="font-bold text-slate-800">Cálculos do Período</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase">Transparência ZLINE</p>
                </div>
             </div>
             
-            <div className="flex flex-wrap items-center gap-2">
-                 <div className="bg-slate-100/80 p-1.5 rounded-xl flex items-center border border-slate-200">
-                    <button 
-                      onClick={() => setMode('simulation')}
-                      className={`px-3 md:px-5 py-2 rounded-lg text-xs md:text-sm font-bold transition-all ${mode === 'simulation' ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-100' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                      Simular
-                    </button>
-                    <button 
-                      onClick={() => setMode('readonly')}
-                      className={`px-3 md:px-5 py-2 rounded-lg text-xs md:text-sm font-bold transition-all ${mode === 'readonly' ? 'bg-white text-slate-800 shadow-sm ring-1 ring-slate-100' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                      Ler
-                    </button>
-                 </div>
-                 
-                 {mode === 'simulation' && (
-                   <button 
-                     onClick={resetSimulation}
-                     className="p-2.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-colors border border-transparent hover:border-rose-100"
-                     title="Resetar Simulação"
-                   >
-                     <RotateCcw size={18} />
-                   </button>
-                 )}
+            <div className="space-y-5">
+               <div className="space-y-1.5">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Check size={10} className="text-emerald-500" /> Receita Líquida</p>
+                  <code className="text-[10px] block bg-slate-900 text-indigo-300 p-3 rounded-xl font-mono leading-relaxed border border-indigo-500/20 shadow-inner break-all">
+                    {validation.formulas.receitaLiquida}
+                  </code>
+               </div>
+               
+               <div className="space-y-1.5">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Check size={10} className="text-emerald-500" /> Lucro Operacional</p>
+                  <code className="text-[10px] block bg-slate-900 text-emerald-400 p-3 rounded-xl font-mono leading-relaxed border border-emerald-500/20 shadow-inner break-all">
+                    {validation.formulas.lucro}
+                  </code>
+               </div>
 
-                 <button 
-                   onClick={downloadAudit}
-                   className="flex items-center gap-2 px-3 md:px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors shadow-sm text-xs md:text-sm"
-                 >
-                   <Download size={16} /> <span className="hidden md:inline">JSON</span>
-                 </button>
-
-                 <button 
-                   onClick={() => setApplyStep(1)}
-                   disabled={events.length === 0}
-                   className={`
-                     flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold shadow-xl shadow-indigo-500/20 transition-all border border-transparent text-xs md:text-sm
-                     ${events.length > 0 ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:-translate-y-0.5' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}
-                   `}
-                 >
-                   <Play size={16} fill="currentColor" /> Apply
-                 </button>
+               <div className="space-y-1.5">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Check size={10} className="text-emerald-500" /> Utilização (Capacity)</p>
+                  <code className="text-[10px] block bg-slate-900 text-indigo-100 p-3 rounded-xl font-mono leading-relaxed border border-white/10 shadow-inner break-all">
+                    {validation.formulas.utilizacao}
+                  </code>
+               </div>
             </div>
-         </div>
-         
-         <div className="flex flex-wrap items-center gap-3 text-[10px] md:text-xs text-slate-500 ml-1">
-             <span className="flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-               <Shield size={10} className="text-slate-400" /> ID: <span className="font-mono font-bold text-slate-600">{snapshotId}</span>
-             </span>
-             <span className="flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-               <History size={10} className="text-slate-400" /> Eventos: <span className="font-bold text-slate-600">{events.length}</span>
-             </span>
+
+            <div className="mt-4 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
+               <div className="flex items-start gap-3">
+                  <Info size={16} className="text-indigo-500 shrink-0 mt-0.5" />
+                  <p className="text-[10px] leading-relaxed text-indigo-800 font-medium">
+                     O cálculo de <b>Capacidade</b> é baseado no volume de itens contratados frente ao limite de produção nominal ({settings.maxProductionCapacity} un).
+                  </p>
+               </div>
+            </div>
          </div>
       </div>
 
-      {/* KPI DELTA SUMMARY */}
-      {mode === 'simulation' && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-           {/* ... kpi summary items ... */}
-           {([
-             { label: 'Receita Líquida', real: realResult.kpis.netRevenue, sim: simResult.kpis.netRevenue },
-             { label: 'Resultado Final', real: realResult.kpis.netResult, sim: simResult.kpis.netResult },
-             { label: 'Margem %', real: realResult.kpis.margin, sim: simResult.kpis.margin, type: 'percent' as const },
-             { label: 'Custo / Conteúdo', real: realResult.kpis.globalCostPerContent, sim: simResult.kpis.globalCostPerContent, type: 'cost' as const }
-           ] as { label: string; real: number; sim: number; type?: 'currency'|'percent'|'number'|'cost' }[]).map((kpi, idx) => (
-             <div key={idx} className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-white/60 shadow-sm relative overflow-hidden group hover:border-indigo-100 transition-colors">
-                <div className="text-[9px] md:text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">{kpi.label}</div>
-                <div className="text-lg md:text-2xl font-bold navy-num flex flex-col items-start gap-1">
-                   <MaskedValue value={kpi.sim} privacyMode={privacyMode} format={kpi.type === 'percent' ? formatPercent : formatCurrency} />
-                   {!privacyMode && <DiffBadge real={kpi.real} sim={kpi.sim} type={kpi.type || 'currency'} />}
+      {/* PERIOD NAVIGATION */}
+      <div className="flex items-center justify-between px-2 pt-4">
+         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
+            {months.map(m => (
+              <button 
+                key={m} 
+                onClick={() => setSelectedMonth(m)}
+                className={`px-5 py-2.5 rounded-full text-xs font-bold border transition-all whitespace-nowrap ${selectedMonth === m ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
+              >
+                {m}
+              </button>
+            ))}
+            <button onClick={() => setIsAddMonthOpen(true)} className="p-2.5 rounded-full bg-indigo-100 text-indigo-600 border border-indigo-200 hover:bg-indigo-200 transition-colors shadow-sm"><Plus size={18} /></button>
+         </div>
+      </div>
+
+      {/* GLOBAL SETTINGS - OBJECTIVE: HYBRID SLIDER + NUMERIC INPUT FOR CAPACITY */}
+      {activeSection === 'global' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in">
+           {/* HYBRID CAPACITY CONTROL */}
+           <div className={`glass-panel p-6 rounded-[32px] space-y-4 border transition-all ${hasGlobalIssue('maxCapacity') ? 'border-amber-300 bg-amber-50/20 ring-1 ring-amber-200 shadow-lg shadow-amber-100/50' : 'border-slate-100/60'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                   <Battery size={14} className="text-slate-400" />
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Capacidade Operacional</label>
                 </div>
-             </div>
-           ))}
+                {hasGlobalIssue('maxCapacity') && <AlertTriangle size={14} className="text-amber-500 animate-pulse" />}
+              </div>
+              
+              <div className="flex items-center justify-between gap-4">
+                 <div className="text-4xl font-black text-navy-800 tracking-tighter drop-shadow-sm">{settings.maxProductionCapacity} <span className="text-xs text-slate-400 font-bold uppercase ml-1">un</span></div>
+                 <div className="relative">
+                    <input 
+                       type="number" 
+                       value={settings.maxProductionCapacity}
+                       onChange={(e) => onUpdateSettings({...settings, maxProductionCapacity: Math.max(0, parseInt(e.target.value) || 0)})}
+                       className="w-24 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-sm font-black text-indigo-700 outline-none focus:ring-2 focus:ring-indigo-500 text-center transition-all no-spinner"
+                    />
+                    <div className="absolute -top-2 -right-2 p-1 bg-white border border-slate-200 rounded-lg shadow-sm"><Edit3 size={10} className="text-slate-400" /></div>
+                 </div>
+              </div>
+              
+              <div className="pt-2">
+                 <input 
+                   type="range" min="1" max="1000" step="1"
+                   value={settings.maxProductionCapacity}
+                   onChange={(e) => onUpdateSettings({...settings, maxProductionCapacity: parseInt(e.target.value) || 10})}
+                   className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
+                 />
+                 <div className="flex justify-between mt-2 px-1">
+                    <span className="text-[9px] font-bold text-slate-300">1 un</span>
+                    <span className="text-[9px] font-bold text-slate-300">500 un</span>
+                    <span className="text-[9px] font-bold text-slate-300">1000 un</span>
+                 </div>
+              </div>
+              <p className="text-[9px] text-slate-400 italic leading-tight">Este valor é o denominador comum para o cálculo de <b>Ocupação</b>. Define quanto o time aguenta entregar sem quebra de qualidade.</p>
+           </div>
+           
+           <div className={`glass-panel p-6 rounded-[32px] space-y-4 border transition-all ${hasGlobalIssue('taxRate') ? 'border-amber-300 bg-amber-50/30 ring-1 ring-amber-200 shadow-lg shadow-amber-100/50' : 'border-slate-100/60'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                   <Landmark size={14} className="text-slate-400" />
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Imposto (%)</label>
+                </div>
+                {hasGlobalIssue('taxRate') && <AlertTriangle size={14} className="text-amber-500 animate-pulse" />}
+              </div>
+              <input 
+                type="number" step="0.01"
+                value={settings.taxRate}
+                onChange={(e) => onUpdateSettings({...settings, taxRate: parseFloat(e.target.value) || 0})}
+                className={`input-money text-3xl outline-none focus:ring-0 transition-colors ${hasGlobalIssue('taxRate') ? 'text-amber-700' : 'text-navy-800'}`}
+              />
+              <div className="pt-4 p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                 <p className="text-[9px] text-slate-400 italic font-medium leading-relaxed">Incide diretamente sobre a Receita Bruta. (Ex: 0.15 = 15%)</p>
+              </div>
+           </div>
+           
+           <div className={`glass-panel p-6 rounded-[32px] space-y-4 border transition-all ${hasGlobalIssue('targetMargin') ? 'border-amber-300 bg-amber-50/30 ring-1 ring-amber-200 shadow-lg shadow-amber-100/50' : 'border-slate-100/60'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                   <Target size={14} className="text-slate-400" />
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Meta de Margem (%)</label>
+                </div>
+                {hasGlobalIssue('targetMargin') && <AlertTriangle size={14} className="text-amber-500 animate-pulse" />}
+              </div>
+              <input 
+                type="number" step="0.01"
+                value={settings.targetMargin}
+                onChange={(e) => onUpdateSettings({...settings, targetMargin: parseFloat(e.target.value) || 0})}
+                className={`input-money text-3xl outline-none focus:ring-0 transition-colors ${hasGlobalIssue('targetMargin') ? 'text-amber-700' : 'text-navy-800'}`}
+              />
+              <div className="pt-4 p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                 <p className="text-[9px] text-slate-400 italic font-medium leading-relaxed">Meta mínima aceitável de lucro operacional. (Ex: 0.25 = 25%)</p>
+              </div>
+           </div>
         </div>
       )}
 
-      {/* CAPACITY & GLOBAL PARAMS */}
-      <div className="glass-panel p-4 md:p-8 rounded-2xl md:rounded-[32px] shadow-sm">
-         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-10">
-             
-             {/* LEFT: PERIOD & CAPACITY */}
-             <div className="lg:col-span-1 space-y-6 md:space-y-8">
-                 <div className="bg-white/50 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-white/60 shadow-inner">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest block mb-4">Simular Período</label>
-                    <div className="flex gap-2">
-                       <div className="relative flex-1">
-                          <select 
-                            value={selMonthName} 
-                            onChange={(e) => handleDateChange(e.target.value, selYear)}
-                            className="w-full appearance-none bg-white border border-slate-200 text-slate-700 font-bold text-base md:text-lg rounded-xl py-2 md:py-3 pl-3 md:pl-4 pr-10 outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
-                          >
-                            {SIM_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
-                       </div>
-                       <div className="relative w-28 md:w-32">
-                          <select 
-                            value={selYear} 
-                            onChange={(e) => handleDateChange(selMonthName, e.target.value)}
-                            className="w-full appearance-none bg-white border border-slate-200 text-slate-700 font-bold text-base md:text-lg rounded-xl py-2 md:py-3 pl-3 md:pl-4 pr-10 outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
-                          >
-                            {SIM_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
-                       </div>
-                    </div>
-                 </div>
-
-                 {/* CAPACITY VISUAL */}
-                 <div className="bg-slate-50/80 rounded-2xl md:rounded-3xl p-4 md:p-6 border border-slate-200">
-                    <div className="flex justify-between items-end mb-3">
-                        <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5 tracking-wider">
-                           <Battery size={14} className="text-slate-400" /> Ocupação
-                        </span>
-                        <span className="text-xl md:text-2xl font-black navy-text">{formatPercent(simResult.kpis.capacityUtilization)}</span>
-                    </div>
-                    {/* ... capacity bar ... */}
-                    <div className="w-full bg-slate-200 h-4 rounded-full overflow-hidden mb-3 shadow-inner">
-                       <div 
-                         className={`h-full rounded-full transition-all duration-700 ease-out shadow-sm ${simResult.kpis.capacityUtilization > 0.9 ? 'bg-rose-500' : simResult.kpis.capacityUtilization > 0.7 ? 'bg-amber-400' : 'bg-emerald-500'}`} 
-                         style={{ width: `${Math.min(simResult.kpis.capacityUtilization * 100, 100)}%` }}
-                       ></div>
-                    </div>
-                    <div className="flex justify-between text-[10px] md:text-[11px] text-slate-500 font-medium px-1">
-                        <span>Contratado: {simResult.kpis.totalContracted} un</span>
-                        <span>Máx: {simResult.kpis.maxCapacity} un</span>
-                    </div>
-                    
-                    <div className="mt-4 md:mt-6 pt-4 md:pt-5 border-t border-slate-200/80">
-                       <label className="text-[10px] font-bold text-indigo-500 uppercase mb-2 block tracking-wider">Capacidade Máxima</label>
-                       <input 
-                         type="number"
-                         value={simulation.global.maxProductionCapacity}
-                         onChange={(e) => handleGlobalChange('maxProductionCapacity', parseFloat(e.target.value))}
-                         disabled={mode === 'readonly'}
-                         className="input-sim py-2 text-base md:text-lg font-mono"
-                       />
-                       <p className="text-[10px] md:text-[11px] text-slate-400 mt-2 leading-relaxed">
-                          Espaço para aprox. <strong className="text-slate-600">{simResult.kpis.potentialClientsSpace.toFixed(1)}</strong> novos clientes médios.
-                       </p>
-                    </div>
-                 </div>
-             </div>
-
-             {/* RIGHT: GLOBAL SETTINGS GRID */}
-             <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 content-start bg-white/40 p-4 md:p-6 rounded-2xl md:rounded-3xl border border-white/50">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Taxa Imposto (0.1 = 10%)</label>
-                  <input 
-                    type="number" step="0.01"
-                    disabled={mode === 'readonly'}
-                    value={simulation.global.taxRate}
-                    onChange={(e) => handleGlobalChange('taxRate', parseFloat(e.target.value))}
-                    className="input-sim py-3 text-base md:text-lg font-mono"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Meta Margem (0.2 = 20%)</label>
-                  <input 
-                    type="number" step="0.01"
-                    disabled={mode === 'readonly'}
-                    value={simulation.global.targetMargin}
-                    onChange={(e) => handleGlobalChange('targetMargin', parseFloat(e.target.value))}
-                    className="input-sim py-3 text-base md:text-lg font-mono"
-                  />
-                </div>
-                
-                <div className="space-y-2 sm:col-span-2">
-                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Método Alocação de Custos</label>
-                   <div className="relative">
-                     <select 
-                       disabled={mode === 'readonly'}
-                       value={simulation.global.allocationMethod}
-                       onChange={(e) => handleGlobalChange('allocationMethod', e.target.value)}
-                       className="input-sim py-3 text-sm appearance-none pr-8"
-                     >
-                       <option value="perDelivered">Por Entregas Realizadas (Padrão)</option>
-                       <option value="perContracted">Por Volume Contratado</option>
-                       <option value="equalShare">Divisão Igualitária entre Ativos</option>
-                     </select>
-                     <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
-                   </div>
-                </div>
-
-                <div className="space-y-3 sm:col-span-2 bg-indigo-50/40 p-4 md:p-5 rounded-2xl border border-indigo-100/60 mt-2">
-                    <label className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest flex items-center justify-between">
-                       <span>Custo por Conteúdo (Definição Manual)</span>
-                       <span className={`text-[9px] px-2 py-0.5 rounded font-bold border ${simResult.kpis.globalCostPerContent === simulation.global.manualCostPerContentOverride ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200'}`}>
-                         {simResult.kpis.globalCostPerContent === simulation.global.manualCostPerContentOverride ? 'ATIVO' : 'AUTO'}
-                       </span>
-                    </label>
-                    <div className="flex flex-col sm:flex-row gap-3 md:gap-4 items-start sm:items-center">
-                       <input 
-                         type="number" step="0.10"
-                         disabled={mode === 'readonly'}
-                         value={simulation.global.manualCostPerContentOverride}
-                         onChange={(e) => handleGlobalChange('manualCostPerContentOverride', parseFloat(e.target.value))}
-                         className={`input-sim py-3 text-xl font-bold text-indigo-900 font-mono w-full sm:w-40 ${privacyMode ? 'privacy-blur' : ''}`}
-                         placeholder="0.00"
-                       />
-                       <span className="text-xs text-slate-500 leading-tight">
-                          {simulation.global.manualCostPerContentOverride > 0 
-                            ? 'Sobrescreve cálculo automático de rateio.' 
-                            : <span>Auto Calculado:<br/><strong className="font-mono text-slate-700">{privacyMode ? '••••' : formatCurrency(simResult.kpis.totalUnitCostBase / (simResult.kpis.totalContracted || 1))}</strong> / un</span>}
-                       </span>
-                    </div>
-                </div>
-             </div>
-         </div>
-      </div>
-
-      {/* CLIENTS SIMULATION TABLE - Simplified responsive scrolling */}
-      <div className="glass-panel rounded-2xl md:rounded-[32px] shadow-sm overflow-hidden border border-white/60">
-         <div 
-            onClick={() => toggleSection('clients')}
-            className="p-4 md:p-6 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
-         >
-            <div className="flex items-center gap-3">
-               <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
-                 <Users size={20} />
-               </div>
-               <h3 className="font-bold text-slate-800 text-base md:text-lg">Simulação de Clientes</h3>
-               <span className="text-xs bg-indigo-50 text-indigo-600 border border-indigo-100 px-2.5 py-0.5 rounded-full font-bold shadow-sm">
-                 {simResult.clients.length}
-               </span>
+      {/* CLIENTS EDITOR */}
+      {activeSection === 'clients' && (
+        <div className="glass-panel rounded-[32px] overflow-hidden animate-fade-in border border-slate-100/60 shadow-xl">
+          <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
+            <div>
+               <h3 className="font-bold text-slate-800">Contratos em {selectedMonth}</h3>
+               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Edição de Receitas e Volumes</p>
             </div>
-            {expandedSection === 'clients' ? <ChevronDown size={20} className="text-slate-400" /> : <ChevronRight size={20} className="text-slate-400" />}
-         </div>
-
-         {expandedSection === 'clients' && (
-           <div className="overflow-x-auto">
-             <table className="w-full text-sm text-left">
-               <thead className="bg-slate-50/80 text-slate-500 uppercase font-bold text-[10px] tracking-wider border-b border-slate-200">
-                 <tr>
-                   <th className="px-4 md:px-6 py-4">Cliente</th>
-                   <th className="px-3 md:px-4 py-4 text-center">Status</th>
-                   <th className="px-3 md:px-4 py-4 text-right">Rec. Bruta</th>
-                   <th className="px-3 md:px-4 py-4 text-center">Contr.</th>
-                   <th className="px-3 md:px-4 py-4 text-center">Entregue</th>
-                   <th className="px-3 md:px-4 py-4 text-right">Lucro</th>
-                   <th className="px-3 md:px-4 py-4 text-right">GAP</th>
-                   <th className="px-3 md:px-4 py-4 text-center">Ações</th>
-                 </tr>
-               </thead>
-               <tbody className="divide-y divide-slate-100 bg-white/40">
-                 {/* ... table rows similar to App.tsx with responsive padding ... */}
-                 {simResult.clients.map(c => {
-                   const hasOverride = simulation.clients[selectedMonth]?.[c.id];
-                   const isAdded = c.id.startsWith('new-');
-                   return (
-                     <tr key={c.id} className={`group hover:bg-white/80 transition-colors ${hasOverride ? 'bg-indigo-50/30' : ''}`}>
-                       <td className="px-4 md:px-6 py-3 font-bold text-slate-700 whitespace-nowrap">
-                         {c.Cliente}
-                         {hasOverride && <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full inline-block ml-2 mb-0.5 shadow-[0_0_4px_#6366f1]"></div>}
-                         {isAdded && <span className="ml-2 text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded uppercase font-bold border border-emerald-200">Novo</span>}
-                       </td>
-                       {/* ... other cells with updated padding px-3 md:px-4 ... */}
-                       <td className="px-3 md:px-4 py-3 text-center">
-                         <div className="relative inline-block">
-                           <select
-                             value={c.Status_Cliente}
-                             onChange={(e) => handleClientChange(c.id, 'Status_Cliente', e.target.value)}
-                             disabled={mode === 'readonly'}
-                             className={`text-[10px] font-bold px-2.5 py-1 rounded-full border outline-none cursor-pointer appearance-none pr-6 transition-all ${c.Status_Cliente === 'Ativo' ? 'bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200'}`}
-                           >
-                              <option value="Ativo">ATIVO</option>
-                              <option value="Inativo">INATIVO</option>
-                           </select>
-                         </div>
-                       </td>
-                       <td className="px-3 md:px-4 py-3 text-right">
+            <button onClick={() => setIsAddClientOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95"><Plus size={14} /> Novo Cliente</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
+                  <th className="px-6 py-4">Cliente</th>
+                  <th className="px-4 py-4 text-center">Status</th>
+                  <th className="px-4 py-4 text-center">Contratado</th>
+                  <th className="px-4 py-4 text-center">Entregue</th>
+                  <th className="px-6 py-4 text-right">Receita Bruta</th>
+                  <th className="px-6 py-4 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {monthClients.map(c => (
+                  <tr key={c.id} className="hover:bg-slate-50/50 group transition-colors">
+                    <td className="px-6 py-4">
+                      <input 
+                        type="text" 
+                        value={c.Cliente} 
+                        onChange={(e) => handleUpdateClient(c.id, 'Cliente', e.target.value)} 
+                        className="input-text-edit font-bold text-slate-800"
+                      />
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                       <select 
+                         value={c.Status_Cliente} 
+                         onChange={(e) => handleUpdateClient(c.id, 'Status_Cliente', e.target.value as any)}
+                         className={`text-[10px] font-bold px-2.5 py-1.5 rounded-full border outline-none cursor-pointer transition-colors ${c.Status_Cliente === 'Ativo' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-slate-100 border-slate-200 text-slate-500'}`}
+                       >
+                         <option value="Ativo">Ativo</option>
+                         <option value="Inativo">Inativo</option>
+                       </select>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <input 
+                        type="number" 
+                        value={c.Conteudos_Contratados} 
+                        onChange={(e) => handleUpdateClient(c.id, 'Conteudos_Contratados', parseInt(e.target.value) || 0)} 
+                        className="w-16 text-center bg-transparent border-b border-transparent focus:border-indigo-500 outline-none rounded font-bold text-slate-600 transition-all" 
+                      />
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <input 
+                        type="number" 
+                        value={c.Conteudos_Entregues} 
+                        onChange={(e) => handleUpdateClient(c.id, 'Conteudos_Entregues', parseInt(e.target.value) || 0)} 
+                        className="w-16 text-center bg-transparent border-b border-transparent focus:border-indigo-500 outline-none rounded font-bold text-slate-600 transition-all" 
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                       <div className="flex items-center justify-end gap-2">
+                         <span className="text-[10px] text-slate-400 font-bold">R$</span>
                          <input 
-                           type="number"
-                           className={`input-bare text-right font-mono font-medium text-slate-700 w-20 md:w-24 ${privacyMode ? 'privacy-blur' : ''}`}
-                           value={c.Receita_Mensal_BRL}
-                           onChange={(e) => handleClientChange(c.id, 'Receita_Mensal_BRL', parseFloat(e.target.value))}
-                           disabled={mode === 'readonly'}
+                            type="number" step="any"
+                            value={c.Receita_Mensal_BRL} 
+                            onChange={(e) => handleUpdateClient(c.id, 'Receita_Mensal_BRL', parseFloat(e.target.value) || 0)}
+                            className={`input-money w-28 text-lg ${privacyMode ? 'blur-sm focus:blur-none' : ''}`}
                          />
-                       </td>
-                       <td className="px-3 md:px-4 py-3 text-center">
-                         <input 
-                           type="number"
-                           className="input-bare text-center w-12 md:w-16 mx-auto font-medium text-slate-600"
-                           value={c.Conteudos_Contratados}
-                           onChange={(e) => handleClientChange(c.id, 'Conteudos_Contratados', parseFloat(e.target.value))}
-                           disabled={mode === 'readonly'}
-                         />
-                       </td>
-                       <td className="px-3 md:px-4 py-3 text-center">
-                         <input 
-                           type="number"
-                           className={`input-bare text-center w-12 md:w-16 mx-auto font-bold ${c.Conteudos_Entregues > c.Conteudos_Contratados ? 'text-amber-600' : 'text-slate-800'}`}
-                           value={c.Conteudos_Entregues}
-                           onChange={(e) => handleClientChange(c.id, 'Conteudos_Entregues', parseFloat(e.target.value))}
-                           disabled={mode === 'readonly'}
-                         />
-                       </td>
-                       <td className="px-3 md:px-4 py-3 text-right font-mono font-bold navy-num whitespace-nowrap">
-                          <MaskedValue value={c.Calculated_Profit} privacyMode={privacyMode} format={formatCurrency} />
-                       </td>
-                       <td className="px-3 md:px-4 py-3 text-right whitespace-nowrap">
-                          <span className={`text-xs font-bold font-mono ${c.Calculated_Gap < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                            <MaskedValue value={c.Calculated_Gap} privacyMode={privacyMode} format={formatCurrency} />
-                          </span>
-                       </td>
-                       <td className="px-3 md:px-4 py-3 text-center flex items-center justify-center gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                          {hasOverride && mode === 'simulation' && (
-                            <button 
-                              onClick={() => {
-                                const newOverrides = { ...simulation.clients[selectedMonth] };
-                                delete newOverrides[c.id];
-                                setSimulation(prev => ({
-                                  ...prev,
-                                  clients: { ...prev.clients, [selectedMonth]: newOverrides }
-                                }));
-                                logEvent('clientMonthly', 'reset', 'override', 'original', c.id);
-                              }}
-                              className="p-1.5 hover:bg-rose-100 text-rose-500 rounded-lg transition-colors"
-                            >
-                              <RotateCcw size={14} />
-                            </button>
-                          )}
-                          {mode === 'simulation' && (
-                              <button 
-                                onClick={() => handleDelete('client', c.id)}
-                                className="p-1.5 hover:bg-slate-200 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                          )}
-                       </td>
-                     </tr>
-                   )
-                 })}
-               </tbody>
-             </table>
-             {mode === 'simulation' && (
-               <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
-                  <button 
-                    onClick={() => setIsAddClientModalOpen(true)}
-                    className="text-xs font-bold text-indigo-600 flex items-center justify-center gap-1.5 hover:bg-indigo-50 py-2.5 px-4 rounded-xl transition-colors mx-auto border border-indigo-100 w-full md:w-auto"
-                  >
-                     <Plus size={14} /> Adicionar Novo Cliente
-                  </button>
-               </div>
-             )}
-           </div>
-         )}
-      </div>
-
-      {/* COSTS TABLE SIMPLIFIED (Similar padding adjustments) */}
-      <div className="glass-panel rounded-2xl md:rounded-[32px] shadow-sm overflow-hidden border border-white/60">
-         {/* ... Header ... */}
-         <div 
-            onClick={() => toggleSection('costs')}
-            className="p-4 md:p-6 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
-         >
-            <div className="flex items-center gap-3">
-               <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
-                 <DollarSign size={20} />
-               </div>
-               <h3 className="font-bold text-slate-800 text-base md:text-lg">Simulação de Custos</h3>
-               <span className="text-xs bg-indigo-50 text-indigo-600 border border-indigo-100 px-2.5 py-0.5 rounded-full font-bold shadow-sm">
-                 {simResult.costs.length}
-               </span>
-            </div>
-            {expandedSection === 'costs' ? <ChevronDown size={20} className="text-slate-400" /> : <ChevronRight size={20} className="text-slate-400" />}
-         </div>
-
-         {expandedSection === 'costs' && (
-           <div className="grid grid-cols-1 lg:grid-cols-3">
-              <div className="lg:col-span-2 overflow-x-auto border-r border-slate-200/60">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-slate-50/80 text-slate-500 uppercase font-bold text-[10px] tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th className="px-4 md:px-6 py-4">Custo</th>
-                      <th className="px-3 md:px-4 py-4 text-center">Tipo</th>
-                      <th className="px-3 md:px-4 py-4 text-right">Valor (Sim)</th>
-                      <th className="px-3 md:px-4 py-4 text-center">Ativo</th>
-                      <th className="px-3 md:px-4 py-4"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white/40">
-                    {/* ... Rows with reduced padding ... */}
-                    {simResult.costs.map(c => {
-                       const hasOverride = simulation.costs[selectedMonth]?.[c.id];
-                       const isAdded = c.id.startsWith('new-');
-                       return (
-                        <tr key={c.id} className="hover:bg-white/80 transition-colors group">
-                          <td className="px-4 md:px-6 py-3 font-medium text-slate-700 whitespace-nowrap">
-                            {c.Tipo_Custo}
-                            {isAdded && <span className="ml-2 text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded uppercase font-bold border border-emerald-200">Novo</span>}
-                          </td>
-                          <td className="px-3 md:px-4 py-3 text-center">
-                             <div className="relative inline-block">
-                               <select
-                                 value={c.Tipo_Custo.includes('Estorno') ? 'Extra' : (c.Tipo_Custo === 'Imposto' ? 'Imposto' : 'Fixo')}
-                                 onChange={(e) => handleCostChange(c.id, 'Tipo_Custo', e.target.value)}
-                                 disabled={mode === 'readonly'}
-                                 className="text-[10px] uppercase font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg appearance-none outline-none cursor-pointer hover:border-indigo-300 pr-5"
-                               >
-                                  <option value="Fixo">Fixo</option>
-                                  <option value="Extra">Extra</option>
-                                  <option value="Imposto">Imposto</option>
-                               </select>
-                             </div>
-                          </td>
-                          <td className="px-3 md:px-4 py-3 text-right">
-                             <input 
-                               type="number"
-                               className={`input-bare text-right font-mono w-24 md:w-28 ${privacyMode ? 'privacy-blur' : ''}`}
-                               value={c.Valor_Mensal_BRL}
-                               onChange={(e) => handleCostChange(c.id, 'Valor_Mensal_BRL', parseFloat(e.target.value))}
-                               disabled={mode === 'readonly'}
-                             />
-                          </td>
-                          <td className="px-3 md:px-4 py-3 text-center">
-                             <input 
-                               type="checkbox"
-                               checked={c.Ativo_no_Mes}
-                               onChange={(e) => handleCostChange(c.id, 'Ativo_no_Mes', e.target.checked)}
-                               disabled={mode === 'readonly'}
-                               className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300 cursor-pointer"
-                             />
-                          </td>
-                          <td className="px-3 md:px-4 py-3 text-center flex items-center justify-center gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                            {hasOverride && mode === 'simulation' && (
-                                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full mx-auto shadow-[0_0_4px_#6366f1]"></div>
-                            )}
-                            {mode === 'simulation' && (
-                                <button 
-                                  onClick={() => handleDelete('cost', c.id)}
-                                  className="p-1.5 hover:bg-slate-200 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                            )}
-                          </td>
-                        </tr>
-                       )
-                    })}
-                  </tbody>
-                </table>
-                {mode === 'simulation' && (
-                  <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
-                    <button 
-                      onClick={() => setIsAddCostModalOpen(true)}
-                      className="text-xs font-bold text-indigo-600 flex items-center justify-center gap-1.5 hover:bg-indigo-50 py-2.5 px-4 rounded-xl transition-colors mx-auto border border-indigo-100 w-full md:w-auto"
-                    >
-                       <Plus size={14} /> Adicionar Novo Custo
-                    </button>
-                  </div>
-                )}
-              </div>
-              
-              {/* Cost Summary Sidebar */}
-              <div className="p-6 md:p-8 bg-slate-50/30">
-                 <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-6">Resumo de Custos</h4>
-                 <div className="space-y-4">
-                    <div className="bg-white p-4 md:p-5 rounded-xl md:rounded-2xl border border-slate-200 shadow-sm">
-                       <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Total Operacional</span>
-                       <div className="text-lg md:text-xl font-bold navy-num">
-                          <MaskedValue value={simResult.kpis.totalOperationalCost} privacyMode={privacyMode} format={formatCurrency} />
                        </div>
-                    </div>
-                    {/* ... other summary boxes ... */}
-                    <div className="bg-white p-4 md:p-5 rounded-xl md:rounded-2xl border border-slate-200 shadow-sm">
-                       <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Não Operacional</span>
-                       <div className="text-lg md:text-xl font-bold text-slate-500">
-                          <MaskedValue value={simResult.kpis.totalCost - simResult.kpis.totalOperationalCost} privacyMode={privacyMode} format={formatCurrency} />
-                       </div>
-                    </div>
-                    <div className="bg-indigo-50 p-4 md:p-5 rounded-xl md:rounded-2xl border border-indigo-100 shadow-sm">
-                       <span className="text-[10px] text-indigo-400 font-bold uppercase block mb-1">Custo / Conteúdo (Global)</span>
-                       <div className="text-xl md:text-2xl font-black text-indigo-900 font-mono">
-                          <MaskedValue value={simResult.kpis.globalCostPerContent} privacyMode={privacyMode} format={formatCurrency} />
-                       </div>
-                       <div className="text-[10px] text-indigo-400 mt-2 font-medium">
-                          Base: <MaskedValue value={simResult.kpis.totalUnitCostBase} privacyMode={privacyMode} format={formatCurrency} />
-                       </div>
-                    </div>
-                 </div>
-              </div>
-           </div>
-         )}
-      </div>
-
-      {/* MODALS & APPLY (Apply Modal is already centered fixed, usually fine on mobile but check padding) */}
-      {applyStep > 0 && (
-         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-md animate-fade-in px-4">
-            <div className="bg-white rounded-2xl md:rounded-[32px] shadow-2xl p-6 md:p-10 max-w-md w-full border border-white/60 relative">
-               <button onClick={() => setApplyStep(0)} className="absolute top-4 right-4 md:top-6 md:right-6 p-2 rounded-full hover:bg-slate-100 text-slate-400 transition-colors"><X size={20}/></button>
-               {/* ... modal content ... */}
-               <h3 className="text-xl md:text-2xl font-bold text-slate-800 mb-6">Confirmar Alterações</h3>
-               {/* ... */}
-            </div>
-         </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <button onClick={() => handleDeleteClient(c.id)} className="p-2.5 text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
+      {/* COSTS EDITOR */}
+      {activeSection === 'costs' && (
+        <div className="glass-panel rounded-[32px] overflow-hidden animate-fade-in border border-slate-100/60 shadow-xl">
+          <div className="p-6 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
+            <div>
+               <h3 className="font-bold text-slate-800">Despesas em {selectedMonth}</h3>
+               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Gestão de Fluxo de Saída</p>
+            </div>
+            <button onClick={() => setIsAddCostOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95"><Plus size={14} /> Nova Despesa</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
+                  <th className="px-6 py-4">Descrição</th>
+                  <th className="px-4 py-4 text-center">Tipo</th>
+                  <th className="px-4 py-4 text-center">Categoria</th>
+                  <th className="px-6 py-4 text-right">Valor</th>
+                  <th className="px-4 py-4 text-center">Ativo</th>
+                  <th className="px-6 py-4 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {monthCosts.map(c => (
+                  <tr key={c.id} className="hover:bg-slate-50/50 group transition-colors">
+                    <td className="px-6 py-4">
+                      <input 
+                        type="text" 
+                        value={c.Tipo_Custo} 
+                        onChange={(e) => handleUpdateCost(c.id, 'Tipo_Custo', e.target.value)} 
+                        className="input-text-edit font-bold text-slate-800"
+                      />
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <select 
+                        value={c.Tipo || 'Fixo'} 
+                        onChange={(e) => handleUpdateCost(c.id, 'Tipo', e.target.value as any)}
+                        className="text-[10px] font-bold px-2 py-1 rounded-lg border bg-slate-50 outline-none cursor-pointer"
+                      >
+                        <option value="Fixo">Fixo</option>
+                        <option value="Variável">Variável</option>
+                        <option value="Extraordinário">Extraordinário</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <select 
+                        value={c.Categoria || 'Operacional'} 
+                        onChange={(e) => handleUpdateCost(c.id, 'Categoria', e.target.value as any)}
+                        className="text-[10px] font-bold px-2 py-1 rounded-lg border bg-slate-50 outline-none cursor-pointer"
+                      >
+                        <option value="Operacional">Operacional</option>
+                        <option value="Admin">Admin</option>
+                        <option value="Outros">Outros</option>
+                      </select>
+                    </td>
+                    <td className="px-6 py-4">
+                       <div className="flex items-center justify-end gap-2">
+                         <span className="text-[10px] text-slate-400 font-bold">R$</span>
+                         <input 
+                            type="number" step="any"
+                            value={c.Valor_Mensal_BRL} 
+                            onChange={(e) => handleUpdateCost(c.id, 'Valor_Mensal_BRL', parseFloat(e.target.value) || 0)}
+                            className={`input-money w-28 text-lg ${privacyMode ? 'blur-sm focus:blur-none' : ''}`}
+                         />
+                       </div>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <input type="checkbox" checked={c.Ativo_no_Mes} onChange={(e) => handleUpdateCost(c.id, 'Ativo_no_Mes', e.target.checked)} className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer" />
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <button onClick={() => handleDeleteCost(c.id)} className="p-2.5 text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* MODALS */}
+      {isAddMonthOpen && (
+        <Modal title="Novo Mês" onClose={() => setIsAddMonthOpen(false)}>
+           <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Mês</label>
+                    <select value={newMonthName} onChange={e => setNewMonthName(e.target.value)} className="w-full p-2.5 border rounded-xl bg-slate-50 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500">{MONTH_NAMES.map(m => <option key={m}>{m}</option>)}</select>
+                 </div>
+                 <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Ano</label>
+                    <select value={newMonthYear} onChange={e => setNewMonthYear(e.target.value)} className="w-full p-2.5 border rounded-xl bg-slate-50 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500">{YEARS.map(y => <option key={y}>{y}</option>)}</select>
+                 </div>
+              </div>
+              <button onClick={handleAddMonth} className="w-full py-3.5 bg-indigo-600 text-white font-bold rounded-2xl text-sm shadow-lg hover:bg-indigo-700 transition-all">Adicionar Período</button>
+           </div>
+        </Modal>
+      )}
+
+      {isAddClientOpen && (
+        <Modal title="Novo Cliente" onClose={() => setIsAddClientOpen(false)}>
+           <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Nome do Cliente</label>
+                <input type="text" id="new-client-name" placeholder="Ex: ZLINE Studios" className="w-full p-3.5 border rounded-2xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-semibold" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Contratado (un)</label>
+                  <input type="number" id="new-client-contracted" defaultValue="10" className="w-full p-3.5 border rounded-2xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Receita Bruta (R$)</label>
+                  <input type="number" id="new-client-revenue" defaultValue="0" className="w-full p-3.5 border rounded-2xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold" />
+                </div>
+              </div>
+              <button 
+                onClick={() => handleAddClient(
+                  (document.getElementById('new-client-name') as HTMLInputElement).value,
+                  parseInt((document.getElementById('new-client-contracted') as HTMLInputElement).value) || 10,
+                  parseFloat((document.getElementById('new-client-revenue') as HTMLInputElement).value) || 0
+                )} 
+                className="w-full py-3.5 bg-indigo-600 text-white font-bold rounded-2xl text-sm shadow-lg hover:bg-indigo-700 transition-all"
+              >
+                Cadastrar Contrato
+              </button>
+           </div>
+        </Modal>
+      )}
+
+      {isAddCostOpen && (
+        <Modal title="Nova Despesa" onClose={() => setIsAddCostOpen(false)}>
+           <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Descrição</label>
+                <input type="text" id="new-cost-name" placeholder="Ex: Novo Software" className="w-full p-3.5 border rounded-2xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-semibold" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Tipo</label>
+                  <select id="new-cost-tipo" className="w-full p-2.5 border rounded-2xl bg-slate-50 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="Fixo">Fixo</option>
+                    <option value="Variável">Variável</option>
+                    <option value="Extraordinário">Extraordinário</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Categoria</label>
+                  <select id="new-cost-categoria" className="w-full p-2.5 border rounded-2xl bg-slate-50 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="Operacional">Operacional</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Outros">Outros</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Valor (R$)</label>
+                <input type="number" id="new-cost-value" defaultValue="0" className="w-full p-3.5 border rounded-2xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-bold" />
+              </div>
+              <button 
+                onClick={() => handleAddCost(
+                  (document.getElementById('new-cost-name') as HTMLInputElement).value,
+                  parseFloat((document.getElementById('new-cost-value') as HTMLInputElement).value) || 0,
+                  (document.getElementById('new-cost-tipo') as HTMLSelectElement).value as CostData['Tipo'],
+                  (document.getElementById('new-cost-categoria') as HTMLSelectElement).value as CostData['Categoria']
+                )} 
+                className="w-full py-3.5 bg-indigo-600 text-white font-bold rounded-2xl text-sm shadow-lg hover:bg-indigo-700 transition-all"
+              >
+                Lançar Despesa
+              </button>
+           </div>
+        </Modal>
+      )}
     </div>
   );
 };
+
+interface ModalProps {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+const Modal: React.FC<ModalProps> = ({ title, onClose, children }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-md animate-fade-in px-4">
+    <div className="bg-white p-8 rounded-[32px] shadow-2xl max-w-sm w-full space-y-6 relative border border-white/60">
+       <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 text-slate-400 transition-colors hover:text-slate-600"><X size={18} /></button>
+       <h3 className="text-xl font-bold text-slate-800 tracking-tight">{title}</h3>
+       {children}
+    </div>
+  </div>
+);
