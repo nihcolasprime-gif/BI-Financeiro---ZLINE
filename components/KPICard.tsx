@@ -92,7 +92,7 @@ const KPICard: React.FC<KPICardProps> = ({
     <div 
       className={`
         relative group
-        p-6 rounded-3xl
+        p-5 md:p-6 rounded-2xl md:rounded-3xl
         bg-white/70 backdrop-blur-2xl
         border ${theme.border}
         shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)]
@@ -100,35 +100,36 @@ const KPICard: React.FC<KPICardProps> = ({
         hover:-translate-y-1 hover:bg-white/90
         transition-all duration-300 ease-out
         overflow-hidden
-        flex flex-col justify-between h-40
+        flex flex-col justify-between
+        h-auto min-h-[140px] md:h-40
       `}
     >
       {/* Background Glow */}
       <div className={`absolute -right-6 -top-6 w-32 h-32 rounded-full blur-3xl ${theme.glow} transition-all duration-500 pointer-events-none`}></div>
 
       {/* Header */}
-      <div className="flex justify-between items-start z-10">
+      <div className="flex justify-between items-start z-10 mb-4 md:mb-0">
         <div className="flex flex-col gap-1">
-           <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest transition-colors group-hover:text-slate-500">{title}</h3>
+           <h3 className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest transition-colors group-hover:text-slate-500">{title}</h3>
            <div className={`h-1 w-6 rounded-full ${theme.accentLine} group-hover:w-10 transition-all duration-300`}></div>
         </div>
 
         <div className={`
           flex items-center justify-center
-          w-10 h-10 rounded-xl
+          w-9 h-9 md:w-10 md:h-10 rounded-xl
           bg-gradient-to-br ${theme.iconBg}
           text-white
           shadow-lg ${theme.iconShadow}
           transform group-hover:scale-110 group-hover:rotate-6
           transition-transform duration-300
         `}>
-          {icon ? React.cloneElement(icon as React.ReactElement<any>, { size: 18, strokeWidth: 2.5 }) : null}
+          {icon ? React.cloneElement(icon as React.ReactElement<any>, { size: 16, strokeWidth: 2.5 }) : null}
         </div>
       </div>
       
       {/* Value */}
       <div className="relative z-10 mt-auto">
-        <div className={`text-3xl lg:text-4xl font-extrabold ${theme.text} tracking-tight drop-shadow-sm`} style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}>
+        <div className={`text-3xl md:text-3xl lg:text-4xl font-extrabold ${theme.text} tracking-tight drop-shadow-sm`} style={{ fontFamily: '"Plus Jakarta Sans", sans-serif' }}>
             {privacyMode ? (
               <span className="blur-md opacity-30 select-none grayscale">R$ 9.999</span>
             ) : (

@@ -70,7 +70,7 @@ export const TrendChart: React.FC<{ data: any[] } & ChartProps> = ({ data, priva
   if (!isValidData(data)) return <div className="h-full flex items-center justify-center text-slate-400 font-medium text-sm">Sem dados disponíveis</div>;
 
   return (
-    <div className="w-full h-[350px]">
+    <div className="w-full h-[300px] md:h-[350px]">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 20, right: 0, bottom: 20, left: 0 }}>
           <defs>
@@ -107,7 +107,7 @@ export const ParetoChart: React.FC<{ data: any[] } & ChartProps> = ({ data, priv
   });
 
   return (
-    <div className="w-full h-[350px]">
+    <div className="w-full h-[300px] md:h-[350px]">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={chartData} margin={{ top: 20, right: 0, bottom: 20, left: 0 }}>
           <CartesianGrid stroke="#f1f5f9" vertical={false} strokeDasharray="4 4" />
@@ -132,7 +132,7 @@ export const ScatterRevContent: React.FC<{ data: any[] } & ChartProps> = ({ data
   if (!isValidData(data)) return <div className="h-full flex items-center justify-center text-slate-400">Sem dados</div>;
 
   return (
-    <div className="w-full h-[350px]">
+    <div className="w-full h-[300px] md:h-[350px]">
       <ResponsiveContainer width="100%" height="100%">
         <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
           <CartesianGrid strokeDasharray="4 4" stroke="#f1f5f9" />
@@ -157,7 +157,7 @@ export const ProfitLossChart: React.FC<{ clients: ExtendedClientData[] } & Chart
   const sortedData = [...clients].sort((a, b) => (b.profit || 0) - (a.profit || 0));
 
   return (
-    <div className="w-full h-[350px]">
+    <div className="w-full h-[300px] md:h-[350px]">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={sortedData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
           <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke="#f1f5f9" />
@@ -183,7 +183,7 @@ export const EfficiencyChart: React.FC<{ clients: ClientData[] } & ChartProps> =
   if (!isValidData(clients)) return <div className="h-full flex items-center justify-center text-slate-400">Sem dados</div>;
 
   return (
-    <div className="w-full h-[350px]">
+    <div className="w-full h-[300px] md:h-[350px]">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={clients} margin={{ top: 20, right: 0, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f1f5f9" />
@@ -217,7 +217,7 @@ export const CostsPieChart: React.FC<CostsPieChartProps> = ({ costs, onSliceClic
   const COLORS = ['#334155', '#475569', '#64748b', '#94a3b8', '#cbd5e1', '#e2e8f0', '#f1f5f9'];
 
   return (
-    <div className="w-full h-[350px]">
+    <div className="w-full h-[250px] md:h-[350px]">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
@@ -252,7 +252,7 @@ export const RealVsIdealChart: React.FC<{ clients: any[] } & ChartProps> = ({ cl
   const sorted = [...clients].sort((a, b) => b.idealRevenueBasedOnContract - a.idealRevenueBasedOnContract);
 
   return (
-    <div className="w-full h-[350px]">
+    <div className="w-full h-[300px] md:h-[350px]">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={sorted} margin={{ top: 20, right: 0, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f1f5f9" />
