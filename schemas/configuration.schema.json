@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SimulationSnapshot",
+  "type": "object",
+  "properties": {
+    "snapshotId": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "createdBy": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      }
+    },
+    "clients": {
+      "type": "array",
+      "items": { "type": "object", "description": "ClientMonthly data structure" }
+    },
+    "costs": {
+      "type": "array",
+      "items": { "type": "object", "description": "CostMonthly data structure" }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "ts": { "type": "string" },
+          "userId": { "type": "string" },
+          "targetType": { "type": "string", "enum": ["clientMonthly", "costMonthly", "setting", "formula", "estorno", "clientMaster", "add", "delete"] },
+          "targetId": { "type": "string" },
+          "month": { "type": "string" },
+          "field": { "type": "string" },
+          "oldValue": {},
+          "newValue": {},
+          "note": { "type": "string" }
+        },
+        "required": ["id", "ts", "userId", "targetType", "field", "newValue"]
+      }
+    },
+    "formulas": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "globalParams": {
+      "type": "object",
+      "properties": {
+        "taxRate": { "type": "number" },
+        "targetMargin": { "type": "number" },
+        "allocationMethod": { "type": "string" },
+        "inflationFactor": { "type": "number" },
+        "tolerancePercentage": { "type": "number" },
+        "maxProductionCapacity": { "type": "number" },
+        "manualCostPerContentOverride": { "type": "number" }
+      }
+    },
+    "previewKPIsBefore": {
+      "type": "object",
+      "additionalProperties": { "type": "number" }
+    },
+    "previewKPIsAfter": {
+      "type": "object",
+      "additionalProperties": { "type": "number" }
+    }
+  },
+  "required": ["snapshotId", "createdAt", "events", "globalParams"]
+}

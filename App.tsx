@@ -5,10 +5,11 @@ import {
   Briefcase, BarChart2, Target, ShieldAlert, Users, Battery,
   Calculator, Scale, History, UserCheck, TrendingDown, ArrowRight,
   Landmark, Zap, Trophy, Percent, X, MoreHorizontal, ExternalLink,
-  ChevronLeft, AlertCircle, ChevronDown, Sparkles
+  ChevronLeft, AlertCircle, ChevronDown, Sparkles, Lock, Settings, FileText
 } from 'lucide-react';
-import { ALL_CLIENTS, ALL_COSTS, MONTHS, STATUSES } from './constants';
+import { ALL_CLIENTS as INITIAL_CLIENTS, ALL_COSTS as INITIAL_COSTS, MONTHS, STATUSES } from './constants';
 import KPICard from './components/KPICard';
+import { ConfigurationsPanel } from './components/ConfigurationsPanel';
 import { 
   ProfitLossChart, EfficiencyChart, CostsPieChart, 
   TrendChart, ParetoChart, ScatterRevContent, RealVsIdealChart 
@@ -17,10 +18,14 @@ import { formatCurrency, formatPercent } from './utils';
 import { ClientData, CostData } from './types';
 
 // --- TABS DEFINITION ---
-type TabType = 'executive' | 'roi' | 'annual' | 'clients' | 'costs' | 'alerts';
+type TabType = 'executive' | 'roi' | 'annual' | 'clients' | 'costs' | 'alerts' | 'settings';
 
 // --- HELPERS FOR BUSINESS LOGIC ---
-const isNonOperationalCost = (costName: string) => {
+const isNonOperationalCost = (costName: string, costType?: string) => {
+  // Respect explicit type if provided, otherwise infer
+  if (costType === 'Extra' || costType === 'Imposto') return true;
+  if (costType === 'Fixo') return false;
+  
   const lower = costName.toLowerCase();
   return lower.includes('estorno') || lower.includes('contador') || lower.includes('imposto');
 };
@@ -202,6 +207,11 @@ const App: React.FC = () => {
   // --- State ---
   const [showSplash, setShowSplash] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('executive');
+  
+  // DATA STATE (Lifted from constants to State to allow Editing/Applying)
+  const [allClients, setAllClients] = useState<ClientData[]>(INITIAL_CLIENTS);
+  const [allCosts, setAllCosts] = useState<CostData[]>(INITIAL_COSTS);
+
   const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[1]); // Default to "Janeiro/2026"
   const [selectedStatus, setSelectedStatus] = useState<string>('Todos');
   const [selectedClient, setSelectedClient] = useState<string>('Todos');
@@ -223,15 +233,15 @@ const App: React.FC = () => {
   // --- DERIVED STATE FOR FILTERS ---
   const [currentMonthName, currentYear] = selectedMonth.split('/');
   const availableYears = useMemo(() => Array.from(new Set(MONTHS.map(m => m.split('/')[1]))).sort(), []);
-  const uniqueClients = ['Todos', ...Array.from(new Set(ALL_CLIENTS.map(c => c.Cliente)))];
+  const uniqueClients = ['Todos', ...Array.from(new Set(allClients.map(c => c.Cliente)))];
 
   // --- 1. PROCESSED DATA FOR SELECTED MONTH ---
   const monthlyMetrics = useMemo(() => {
-    const clients = ALL_CLIENTS.filter(c => c.Mes_Referencia === selectedMonth);
-    const costs = ALL_COSTS.filter(c => c.Mes_Referencia === selectedMonth && c.Ativo_no_Mes);
+    const clients = allClients.filter(c => c.Mes_Referencia === selectedMonth);
+    const costs = allCosts.filter(c => c.Mes_Referencia === selectedMonth && c.Ativo_no_Mes);
 
-    const opCosts = costs.filter(c => !isNonOperationalCost(c.Tipo_Custo));
-    const nonOpCosts = costs.filter(c => isNonOperationalCost(c.Tipo_Custo));
+    const opCosts = costs.filter(c => !isNonOperationalCost(c.Tipo_Custo, c.Tipo_Custo));
+    const nonOpCosts = costs.filter(c => isNonOperationalCost(c.Tipo_Custo, c.Tipo_Custo));
     const laborCosts = costs.filter(c => isLaborCost(c.Tipo_Custo));
 
     const totalOpCost = opCosts.reduce((sum, c) => sum + c.Valor_Mensal_BRL, 0);
@@ -247,7 +257,7 @@ const App: React.FC = () => {
       totalOpCost, totalNonOpCost, totalLaborCost, totalCost, 
       totalDelivered, costPerContent 
     };
-  }, [selectedMonth]);
+  }, [selectedMonth, allClients, allCosts]); // Added dependencies
 
   // --- 2. VIEW DATA (Filtered) ---
   const viewData = useMemo(() => {
@@ -313,13 +323,11 @@ const App: React.FC = () => {
   // --- 3. ANNUAL / LTV DATA ---
   const annualData = useMemo(() => {
     const trend = MONTHS.map(month => {
-      const mClients = ALL_CLIENTS.filter(c => c.Mes_Referencia === month);
-      const mCosts = ALL_COSTS.filter(c => c.Mes_Referencia === month && c.Ativo_no_Mes);
+      const mClients = allClients.filter(c => c.Mes_Referencia === month);
+      const mCosts = allCosts.filter(c => c.Mes_Referencia === month && c.Ativo_no_Mes);
       
       // Cost Logic for monthly calc
-      const opCosts = mCosts.filter(c => !isNonOperationalCost(c.Tipo_Custo));
-      const nonOpCosts = mCosts.filter(c => isNonOperationalCost(c.Tipo_Custo));
-      const totalOpCost = opCosts.reduce((sum, c) => sum + c.Valor_Mensal_BRL, 0);
+      const opCosts = mCosts.filter(c => !isNonOperationalCost(c.Tipo_Custo, c.Tipo_Custo));
       const totalCost = mCosts.reduce((sum, c) => sum + c.Valor_Mensal_BRL, 0);
 
       const revenue = mClients.reduce((sum, c) => sum + c.Receita_Liquida_Apos_Imposto_BRL, 0);
@@ -330,7 +338,7 @@ const App: React.FC = () => {
     });
 
     const clientMap = new Map();
-    ALL_CLIENTS.forEach(c => {
+    allClients.forEach(c => {
       if (!clientMap.has(c.Cliente)) {
         clientMap.set(c.Cliente, { Cliente: c.Cliente, TotalRevenue: 0, TotalDelivered: 0 });
       }
@@ -349,7 +357,7 @@ const App: React.FC = () => {
     const totalAnnualProfit = trend.reduce((s, m) => s + m.profit, 0);
 
     return { trend, ltvData, totalAnnualRevenue, totalAnnualCost, totalAnnualProfit };
-  }, []);
+  }, [allClients, allCosts]); // Added dependencies
 
   // --- 4. ADVANCED & GLOBAL ALERTS LOGIC (UPDATED) ---
   const detailedAlerts = useMemo(() => {
@@ -373,8 +381,8 @@ const App: React.FC = () => {
     // First, map cost per content for each month to be accurate
     const costMap = new Map();
     MONTHS.forEach(month => {
-       const mCosts = ALL_COSTS.filter(c => c.Mes_Referencia === month && c.Ativo_no_Mes && !isNonOperationalCost(c.Tipo_Custo));
-       const mClients = ALL_CLIENTS.filter(c => c.Mes_Referencia === month);
+       const mCosts = allCosts.filter(c => c.Mes_Referencia === month && c.Ativo_no_Mes && !isNonOperationalCost(c.Tipo_Custo, c.Tipo_Custo));
+       const mClients = allClients.filter(c => c.Mes_Referencia === month);
        
        const totalOpCost = mCosts.reduce((s, c) => s + c.Valor_Mensal_BRL, 0);
        const totalDelivered = mClients.reduce((s, c) => s + c.Conteudos_Entregues, 0);
@@ -383,7 +391,7 @@ const App: React.FC = () => {
     });
 
     // Iterate ALL clients to find negative margin instances
-    ALL_CLIENTS.forEach(c => {
+    allClients.forEach(c => {
        const unitCost = costMap.get(c.Mes_Referencia) || 0;
        const allocatedCost = c.Conteudos_Entregues * unitCost;
        const profit = c.Receita_Liquida_Apos_Imposto_BRL - allocatedCost;
@@ -407,7 +415,15 @@ const App: React.FC = () => {
         if(a.type !== 'critical' && b.type === 'critical') return 1;
         return 0;
     });
-  }, [annualData, selectedMonth]); // Dependent on annualData calc and current selectedMonth for context
+  }, [annualData, selectedMonth, allClients, allCosts]);
+
+  // Handler for saving simulation data
+  const handleApplyChanges = (newClients: ClientData[], newCosts: CostData[]) => {
+      setAllClients(newClients);
+      setAllCosts(newCosts);
+      // Optional: Add a toast notification here
+      console.log("Applied changes to main App state");
+  };
 
   if (showSplash) {
     return <SplashScreen />;
@@ -439,7 +455,7 @@ const App: React.FC = () => {
             </div>
 
             {/* Filters - Responsive Grid/Flex */}
-            {activeTab !== 'annual' && activeTab !== 'alerts' && (
+            {activeTab !== 'annual' && activeTab !== 'alerts' && activeTab !== 'settings' && (
               <div className="flex flex-wrap md:flex-nowrap items-center justify-center gap-2 bg-white/60 p-1.5 rounded-2xl border border-white/60 shadow-inner w-full md:w-auto">
                 {/* Month Selector */}
                 <div className="relative group flex-1 md:flex-none">
@@ -492,6 +508,7 @@ const App: React.FC = () => {
             <TabButton id="clients" label="Clientes" icon={Users} activeTab={activeTab} onClick={setActiveTab} />
             <TabButton id="costs" label="Custos" icon={DollarSign} activeTab={activeTab} onClick={setActiveTab} />
             <TabButton id="alerts" label="Alertas" icon={ShieldAlert} activeTab={activeTab} onClick={setActiveTab} />
+            <TabButton id="settings" label="Configurações" icon={Settings} activeTab={activeTab} onClick={setActiveTab} />
           </div>
         </div>
       </header>
@@ -765,7 +782,7 @@ const App: React.FC = () => {
                               </div>
                               <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden flex">
                                    {/* If selected is Op, show it here */}
-                                   {!isNonOperationalCost(selectedCostItem.Tipo_Custo) && (
+                                   {!isNonOperationalCost(selectedCostItem.Tipo_Custo, selectedCostItem.Tipo_Custo) && (
                                       <div className="bg-indigo-500 h-full animate-pulse" style={{ width: `${Math.min((selectedCostItem.Valor_Mensal_BRL / monthlyMetrics.totalOpCost) * 100, 100)}%` }}></div>
                                    )}
                               </div>
@@ -778,7 +795,7 @@ const App: React.FC = () => {
                                   <span className="text-slate-500">{formatCurrency(monthlyMetrics.totalNonOpCost)}</span>
                               </div>
                               <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden flex">
-                                   {isNonOperationalCost(selectedCostItem.Tipo_Custo) && (
+                                   {isNonOperationalCost(selectedCostItem.Tipo_Custo, selectedCostItem.Tipo_Custo) && (
                                       <div className="bg-amber-500 h-full animate-pulse" style={{ width: `${Math.min((selectedCostItem.Valor_Mensal_BRL / monthlyMetrics.totalNonOpCost) * 100, 100)}%` }}></div>
                                    )}
                               </div>
@@ -807,7 +824,7 @@ const App: React.FC = () => {
                            <ShieldAlert size={14} /> Análise de Risco
                         </div>
                         <p className="text-sm text-amber-800 leading-snug">
-                         {isNonOperationalCost(selectedCostItem.Tipo_Custo) 
+                         {isNonOperationalCost(selectedCostItem.Tipo_Custo, selectedCostItem.Tipo_Custo) 
                            ? `Este custo não contribui diretamente para a entrega. Se for recorrente e representar mais de 10% do total não operacional, considere renegociar.` 
                            : `Custo essencial para a operação. Reduções aqui podem impactar a qualidade da entrega. Monitore a eficiência do uso.`}
                         </p>
@@ -892,6 +909,17 @@ const App: React.FC = () => {
                  )}
               </div>
            </div>
+        )}
+
+        {/* --- TAB 7: SETTINGS & AUDIT --- */}
+        {activeTab === 'settings' && (
+           <ConfigurationsPanel 
+             allClients={allClients} 
+             allCosts={allCosts} 
+             months={MONTHS} 
+             currentMonth={selectedMonth}
+             onApplyChanges={handleApplyChanges}
+           />
         )}
 
       </main>
