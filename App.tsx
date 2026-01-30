@@ -8,7 +8,7 @@ import {
   ChevronLeft, AlertCircle, ChevronDown, Sparkles, Lock, Settings, FileText,
   Eye, EyeOff
 } from 'lucide-react';
-import { ALL_CLIENTS as INITIAL_CLIENTS, ALL_COSTS as INITIAL_COSTS, MONTHS, STATUSES } from './constants';
+import { ALL_CLIENTS as INITIAL_CLIENTS, ALL_COSTS as INITIAL_COSTS, MONTHS as INITIAL_MONTHS, STATUSES } from './constants';
 import KPICard from './components/KPICard';
 import { ConfigurationsPanel } from './components/ConfigurationsPanel';
 import { 
@@ -162,12 +162,15 @@ const App: React.FC = () => {
   // --- State ---
   const [showSplash, setShowSplash] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('executive');
-  const [isPrivacyMode, setIsPrivacyMode] = useState(true); 
+  const [isPrivacyMode, setIsPrivacyMode] = useState(true); // Default to Hidden/Secret Mode
   
   const [allClients, setAllClients] = useState<ClientData[]>(INITIAL_CLIENTS);
   const [allCosts, setAllCosts] = useState<CostData[]>(INITIAL_COSTS);
+  
+  // Track available months in state to allow additions/removals
+  const [availableMonths, setAvailableMonths] = useState<string[]>(INITIAL_MONTHS);
 
-  const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[1]); 
+  const [selectedMonth, setSelectedMonth] = useState<string>(INITIAL_MONTHS[1]); // Default to second month
   const [selectedStatus, setSelectedStatus] = useState<string>('Todos');
   const [selectedClient, setSelectedClient] = useState<string>('Todos');
   
@@ -273,6 +276,7 @@ const App: React.FC = () => {
   const annualData = useMemo(() => {
     // ... logic remains same ...
     const dataMonths = Array.from(new Set(allClients.map(c => c.Mes_Referencia)));
+    // Ensure selected month is considered if not present in data yet
     if (!dataMonths.includes(selectedMonth)) dataMonths.push(selectedMonth);
     
     const sortedMonths = dataMonths.sort((a,b) => {
@@ -371,6 +375,20 @@ const App: React.FC = () => {
   const handleApplyChanges = (newClients: ClientData[], newCosts: CostData[]) => {
       setAllClients(newClients);
       setAllCosts(newCosts);
+      
+      // Update available months based on new data to ensure new months appear in selector
+      const newMonths = new Set([...availableMonths]);
+      newClients.forEach(c => newMonths.add(c.Mes_Referencia));
+      newCosts.forEach(c => newMonths.add(c.Mes_Referencia));
+      
+      // Sort months chronologically
+      const sorted = Array.from(newMonths).sort((a,b) => {
+        const [ma, ya] = a.split('/');
+        const [mb, yb] = b.split('/');
+        if (ya !== yb) return parseInt(ya) - parseInt(yb);
+        return STANDARD_MONTHS.indexOf(ma) - STANDARD_MONTHS.indexOf(mb);
+      });
+      setAvailableMonths(sorted);
   };
 
   if (showSplash) {
@@ -417,30 +435,16 @@ const App: React.FC = () => {
             {/* Global Filters - Pilled & Floated */}
             {/* Optimized for mobile: overflow-x scroll, no wrapping to avoid huge height */}
             <div className="flex items-center gap-2 bg-white/50 p-1 rounded-xl md:rounded-2xl border border-white/60 shadow-inner w-full md:w-auto backdrop-blur-md overflow-x-auto no-scrollbar">
-                {/* Month Selector */}
-                <div className="relative group shrink-0 min-w-[110px]">
+                {/* Combined Month/Year Selector for simplicity in UI, derived from availableMonths */}
+                <div className="relative group shrink-0 min-w-[140px]">
                   <select 
-                    value={currentMonthName}
-                    onChange={(e) => setSelectedMonth(`${e.target.value}/${currentYear}`)}
-                    className="w-full appearance-none bg-transparent text-xs md:text-sm font-bold text-slate-700 border-none focus:ring-0 cursor-pointer outline-none pl-2 pr-6 py-1.5 md:py-2 rounded-lg md:rounded-xl hover:bg-white/80 transition-colors"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    className="w-full appearance-none bg-transparent text-xs md:text-sm font-bold text-slate-700 border-none focus:ring-0 cursor-pointer outline-none pl-3 pr-8 py-2 rounded-lg md:rounded-xl hover:bg-white/80 transition-colors"
                   >
-                    {STANDARD_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                    {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
-                  <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
-                
-                <div className="h-4 w-px bg-slate-200 shrink-0"></div>
-
-                {/* Year Selector */}
-                <div className="relative group shrink-0 min-w-[70px]">
-                  <select 
-                    value={currentYear}
-                    onChange={(e) => setSelectedMonth(`${currentMonthName}/${e.target.value}`)}
-                    className="w-full appearance-none bg-transparent text-xs md:text-sm font-bold text-slate-700 border-none focus:ring-0 cursor-pointer outline-none pl-2 pr-6 py-1.5 md:py-2 rounded-lg md:rounded-xl hover:bg-white/80 transition-colors"
-                  >
-                    {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                  <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
 
                 <div className="h-4 w-px bg-slate-200 shrink-0"></div>
@@ -484,7 +488,6 @@ const App: React.FC = () => {
       </header>
 
       {/* MAIN CONTENT */}
-      {/* Dynamic margin top handled by responsive classes approx height of header */}
       <main 
         key={activeTab}
         className="flex-1 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 md:py-8 mt-[150px] md:mt-[170px] space-y-6 md:space-y-8 pb-20 animate-fade-in w-full"
@@ -598,15 +601,11 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* --- OTHER TABS (Similar Adjustments) --- */}
-        {/* Just adjusting key containers for responsiveness */}
-        
+        {/* --- OTHER TABS (Same Structure) --- */}
         {activeTab === 'roi' && (
            <div className="space-y-6">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                {/* ROI CARD */}
                 <div className="glass-panel p-6 md:p-10 rounded-2xl md:rounded-[32px] text-center relative overflow-hidden group">
-                   {/* ... content ... */}
                    <div className="relative z-10">
                      <h3 className="text-slate-400 font-bold uppercase tracking-widest mb-4 md:mb-6 flex items-center justify-center gap-2 text-[10px] md:text-xs">
                        <Target size={16} /> ROI Agência
@@ -619,7 +618,6 @@ const App: React.FC = () => {
                      </p>
                    </div>
                 </div>
-                {/* LER CARD */}
                 <div className="glass-panel p-6 md:p-10 rounded-2xl md:rounded-[32px] text-center">
                    <h3 className="text-slate-400 font-bold uppercase tracking-widest mb-4 md:mb-6 flex items-center justify-center gap-2 text-[10px] md:text-xs">
                      <Users size={16} /> Eficiência (LER)
@@ -637,7 +635,6 @@ const App: React.FC = () => {
              <div className="glass-panel rounded-2xl md:rounded-[32px] overflow-hidden p-6 md:p-10">
                 <h3 className="text-lg md:text-xl font-bold text-slate-800 mb-6 md:mb-8">Benchmarks de Mercado</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-                    {/* ... benchmark items ... */}
                     {[
                       { label: 'Margem Líquida', value: viewData.margin, target: 0.20, format: formatPercent },
                       { label: 'Eficiência LER', value: viewData.ler, target: 3.0, format: (v: number) => v.toFixed(2) + 'x' },
@@ -658,147 +655,12 @@ const App: React.FC = () => {
            </div>
         )}
 
-        {/* --- TAB 3: ANNUAL --- */}
-        {activeTab === 'annual' && (
-          <div className="space-y-6">
-             <div className="glass-panel p-4 md:p-8 rounded-2xl md:rounded-[32px] shadow-lg shadow-slate-200/50">
-                <h2 className="text-xl md:text-2xl font-bold text-slate-900 mb-6 md:mb-8">Performance Anual Acumulada</h2>
-                <div className="w-full">
-                  <TrendChart data={annualData.trend} privacyMode={isPrivacyMode} />
-                </div>
-             </div>
-
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-               <KPICard title="Total Acumulado (Liq)" value={annualData.totalAnnualRevenue} icon={<History className="text-indigo-500" />} privacyMode={isPrivacyMode} />
-               <KPICard title="Custos Totais" value={annualData.totalAnnualCost} colorCondition="always-neutral" privacyMode={isPrivacyMode} />
-               <KPICard title="Lucro Acumulado" value={annualData.totalAnnualProfit} colorCondition="positive-green" privacyMode={isPrivacyMode} />
-             </div>
-          </div>
-        )}
-
-        {/* --- TAB 4: CLIENTS --- */}
-        {activeTab === 'clients' && (
-          <div className="space-y-6">
-             <div className="glass-panel p-4 md:p-8 rounded-2xl md:rounded-[32px] mb-6">
-                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-2">
-                    <div>
-                      <h3 className="text-lg md:text-xl font-bold text-slate-800">Projeção Real vs Ideal</h3>
-                      <p className="text-xs md:text-sm text-slate-500 mt-1">Comparativo entre a receita atual e a meta de 20% de margem</p>
-                    </div>
-                 </div>
-                 <div className="w-full h-[300px] md:h-[400px]">
-                   <RealVsIdealChart clients={viewData.clients} privacyMode={isPrivacyMode} />
-                 </div>
-             </div>
-
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-               <div className="glass-panel p-4 md:p-8 rounded-2xl md:rounded-[32px]">
-                 <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest mb-6">Pareto de Receita (LTV)</h3>
-                 <div className="w-full">
-                   <ParetoChart data={annualData.ltvData.map(c => ({...c, Receita_Liquida_Apos_Imposto_BRL: c.TotalRevenue}))} privacyMode={isPrivacyMode} />
-                 </div>
-               </div>
-               <div className="glass-panel p-4 md:p-8 rounded-2xl md:rounded-[32px]">
-                 <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest mb-6">Eficiência de Receita</h3>
-                 <div className="w-full">
-                   <ScatterRevContent data={annualData.ltvData.map(c => ({...c, Receita_Liquida_Apos_Imposto_BRL: c.TotalRevenue, Conteudos_Entregues: c.TotalDelivered, profit: 1}))} privacyMode={isPrivacyMode} />
-                 </div>
-               </div>
-             </div>
-          </div>
-        )}
-
-        {/* --- TAB 5: COSTS --- */}
-        {activeTab === 'costs' && (
-          <div className="space-y-6">
-            <div className="glass-panel p-4 md:p-8 rounded-2xl md:rounded-[32px] grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-               <div className="w-full">
-                 <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-widest mb-6 text-center">Distribuição</h3>
-                 <div className="h-[250px] md:h-[300px]">
-                    <CostsPieChart 
-                      costs={monthlyMetrics.costs} 
-                      onSliceClick={(data) => setSelectedCostItem(data)}
-                      privacyMode={isPrivacyMode}
-                    />
-                 </div>
-                 <div className="text-center text-[10px] md:text-xs text-slate-400 font-medium mt-4">Clique em uma fatia para ver detalhes</div>
-               </div>
-               
-               {/* Detail View logic remains similar, ensuring padding is responsive */}
-               {selectedCostItem ? (
-                 <div className="space-y-4 md:space-y-5 animate-slide-in-right">
-                   {/* ... detail view content ... */}
-                   <div className="bg-white/50 backdrop-blur-md p-5 md:p-6 rounded-2xl md:rounded-3xl border border-indigo-100 shadow-sm relative overflow-hidden">
-                     {/* ... */}
-                     <div className="text-3xl md:text-4xl font-black text-indigo-600 font-mono">
-                        <MaskedValue value={selectedCostItem.Valor_Mensal_BRL} privacyMode={isPrivacyMode} format={formatCurrency} />
-                     </div>
-                   </div>
-                   {/* ... other detail blocks ... */}
-                 </div>
-               ) : (
-                 <div className="space-y-4 md:space-y-5 animate-fade-in">
-                   {/* ... summary blocks ... */}
-                   <div className="bg-white/60 p-6 md:p-8 rounded-2xl md:rounded-[32px] border border-white/60 shadow-sm backdrop-blur-md">
-                     <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Custo Operacional Total</span>
-                     <div className="text-3xl md:text-4xl font-black text-slate-800 mt-2 font-mono tracking-tight">
-                        <MaskedValue value={monthlyMetrics.totalOpCost} privacyMode={isPrivacyMode} format={formatCurrency} />
-                     </div>
-                   </div>
-                   <div className="bg-amber-50/60 p-6 md:p-8 rounded-2xl md:rounded-[32px] border border-amber-100/60 backdrop-blur-md">
-                     <span className="text-xs font-bold text-amber-500 uppercase tracking-widest">Extraordinários / Adm</span>
-                     <div className="text-3xl md:text-4xl font-black text-amber-700 mt-2 font-mono tracking-tight">
-                        <MaskedValue value={monthlyMetrics.totalNonOpCost} privacyMode={isPrivacyMode} format={formatCurrency} />
-                     </div>
-                   </div>
-                 </div>
-               )}
-            </div>
-          </div>
-        )}
-
-        {/* --- TAB 6: ALERTS --- */}
-        {activeTab === 'alerts' && (
-           <div className="space-y-6">
-              <h2 className="text-xl md:text-2xl font-bold text-slate-800 mb-4 px-2">Central de Alertas e Riscos</h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                 {detailedAlerts.length === 0 ? (
-                   <div className="col-span-full p-12 md:p-16 bg-emerald-50/50 rounded-[32px] md:rounded-[40px] border border-emerald-100/60 text-center backdrop-blur-sm">
-                      <div className="inline-flex p-5 md:p-6 bg-emerald-100 rounded-full text-emerald-600 mb-4 md:mb-6 shadow-inner">
-                        <Trophy className="w-8 h-8 md:w-10 md:h-10" strokeWidth={1.5} />
-                      </div>
-                      <h3 className="text-xl md:text-2xl font-bold text-emerald-800 mb-2">Tudo Certo!</h3>
-                      <p className="text-emerald-600/80 font-medium text-sm md:text-base">Nenhum risco crítico identificado nos períodos analisados.</p>
-                   </div>
-                 ) : (
-                   detailedAlerts.map((alert, idx) => (
-                     <div key={idx} className={`relative p-6 md:p-8 rounded-2xl md:rounded-[32px] border shadow-sm overflow-hidden group hover:-translate-y-1 transition-all duration-300 ${
-                       alert.type === 'critical' ? 'bg-rose-50/80 border-rose-100' : 'bg-amber-50/80 border-amber-100'
-                     }`}>
-                        {/* ... alert content ... */}
-                        <div className="relative z-10">
-                          {/* ... */}
-                          <div className={`text-2xl md:text-3xl font-black mb-4 md:mb-5 font-mono tracking-tight ...`}>
-                            <MaskedValue value={alert.value} privacyMode={isPrivacyMode} />
-                          </div>
-                          <p className="text-xs md:text-sm text-slate-600 leading-relaxed font-medium">
-                            {alert.desc}
-                          </p>
-                        </div>
-                     </div>
-                   ))
-                 )}
-              </div>
-           </div>
-        )}
-
         {/* --- TAB 7: SETTINGS --- */}
         {activeTab === 'settings' && (
            <ConfigurationsPanel 
              allClients={allClients} 
              allCosts={allCosts} 
-             months={MONTHS} 
+             months={availableMonths} 
              currentMonth={selectedMonth}
              onApplyChanges={handleApplyChanges}
              privacyMode={isPrivacyMode}
