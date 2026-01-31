@@ -185,6 +185,40 @@ export const CostsPieChart: React.FC<CostsPieChartProps> = ({ costs, onSliceClic
   );
 };
 
+export const OriginPieChart: React.FC<{ data: { name: string; value: number }[] } & BaseChartProps> = ({ data, privacyMode }) => {
+    if (!isValidData(data)) return <div className="h-full flex items-center justify-center text-slate-400 font-medium text-xs uppercase tracking-widest">Sem dados de origem</div>;
+  
+    // Vibrant colors for marketing channels
+    const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+  
+    return (
+      <div className="w-full h-[250px] md:h-[350px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              innerRadius={60}
+              outerRadius={90}
+              paddingAngle={5}
+              dataKey="value"
+              nameKey="name"
+              stroke="none"
+              cornerRadius={8}
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              ))}
+            </Pie>
+            <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }} />
+            <Tooltip content={<CustomTooltip privacyMode={privacyMode} />} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  };
+
 export const RealVsIdealChart: React.FC<{ clients: ExtendedClientData[] } & BaseChartProps> = ({ clients, privacyMode }) => {
   if (!isValidData(clients)) return <div className="h-full flex items-center justify-center text-slate-400 font-medium text-xs uppercase tracking-widest">Sem dados comparativos</div>;
 

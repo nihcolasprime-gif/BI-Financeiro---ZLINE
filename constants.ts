@@ -1,5 +1,5 @@
 
-import { ClientContract, ClientMonthlyResult, CostData } from './types';
+import { ClientContract, ClientMonthlyResult, CostData, MonthlyGrowthData } from './types';
 
 export const STANDARD_MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -8,52 +8,52 @@ export const INITIAL_CONTRACTS: ClientContract[] = [
   {
     id: 'c-alexandre', Cliente: 'Alexandre', Status_Contrato: 'Ativo',
     Data_Inicio: '2025-01-10', Data_Renovacao: '2026-01-10', Dia_Pagamento: 5,
-    Descricao_Servico: 'Criação de Conteúdo + Gestão de Tráfego', Valor_Sugerido_Renovacao: 950
+    Descricao_Servico: 'Criação de Conteúdo + Gestão de Tráfego', Valor_Sugerido_Renovacao: 950, Origem: 'Indicação'
   },
   {
     id: 'c-deivid', Cliente: 'Deivid', Status_Contrato: 'Ativo',
     Data_Inicio: '2025-06-15', Data_Renovacao: '2026-06-15', Dia_Pagamento: 15,
-    Descricao_Servico: 'Estratégia Digital + Produção Audiovisual', Valor_Sugerido_Renovacao: 1850
+    Descricao_Servico: 'Estratégia Digital + Produção Audiovisual', Valor_Sugerido_Renovacao: 1850, Origem: 'Ads'
   },
   {
     id: 'c-alan', Cliente: 'Alan', Status_Contrato: 'Ativo',
     Data_Inicio: '2025-10-01', Data_Renovacao: '2026-04-01', Dia_Pagamento: 10,
-    Descricao_Servico: 'Social Media Básico', Valor_Sugerido_Renovacao: 400
+    Descricao_Servico: 'Social Media Básico', Valor_Sugerido_Renovacao: 400, Origem: 'Indicação'
   },
   {
     id: 'c-leo', Cliente: 'Leo', Status_Contrato: 'Ativo',
     Data_Inicio: '2025-03-20', Data_Renovacao: '2026-03-20', Dia_Pagamento: 20,
-    Descricao_Servico: 'Criação de Conteúdo e Reels', Valor_Sugerido_Renovacao: 600
+    Descricao_Servico: 'Criação de Conteúdo e Reels', Valor_Sugerido_Renovacao: 600, Origem: 'Outbound'
   },
   {
     id: 'c-renan', Cliente: 'Renan', Status_Contrato: 'Ativo',
     Data_Inicio: '2025-11-12', Data_Renovacao: '2026-11-12', Dia_Pagamento: 12,
-    Descricao_Servico: 'Assessoria de Comunicação Completa', Valor_Sugerido_Renovacao: 800
+    Descricao_Servico: 'Assessoria de Comunicação Completa', Valor_Sugerido_Renovacao: 800, Origem: 'Parceria'
   },
   {
     id: 'c-alex', Cliente: 'Alex', Status_Contrato: 'Ativo',
     Data_Inicio: '2025-09-05', Data_Renovacao: '2026-03-05', Dia_Pagamento: 5,
-    Descricao_Servico: 'Gestão de LinkedIn', Valor_Sugerido_Renovacao: 650
+    Descricao_Servico: 'Gestão de LinkedIn', Valor_Sugerido_Renovacao: 650, Origem: 'Ads'
   },
   {
     id: 'c-claudio', Cliente: 'Cláudio', Status_Contrato: 'Ativo',
     Data_Inicio: '2025-08-01', Data_Renovacao: '2026-02-01', Dia_Pagamento: 1,
-    Descricao_Servico: 'Consultoria Mensal', Valor_Sugerido_Renovacao: 750
+    Descricao_Servico: 'Consultoria Mensal', Valor_Sugerido_Renovacao: 750, Origem: 'Indicação'
   },
   {
     id: 'c-olimpia', Cliente: 'Olimpia', Status_Contrato: 'Ativo',
     Data_Inicio: '2025-07-22', Data_Renovacao: '2026-07-22', Dia_Pagamento: 22,
-    Descricao_Servico: 'Criação de Conteúdo Premium', Valor_Sugerido_Renovacao: 1100
+    Descricao_Servico: 'Criação de Conteúdo Premium', Valor_Sugerido_Renovacao: 1100, Origem: 'Orgânico'
   },
   {
     id: 'c-elbeton', Cliente: 'Elbeton', Status_Contrato: 'Ativo',
     Data_Inicio: '2026-01-01', Data_Renovacao: '2027-01-01', Dia_Pagamento: 1,
-    Descricao_Servico: 'Novo Contrato: Social Media', Valor_Sugerido_Renovacao: 550
+    Descricao_Servico: 'Novo Contrato: Social Media', Valor_Sugerido_Renovacao: 550, Origem: 'Ads'
   },
   {
     id: 'c-lucas', Cliente: 'Lucas', Status_Contrato: 'Ativo',
     Data_Inicio: '2026-01-10', Data_Renovacao: '2026-07-10', Dia_Pagamento: 10,
-    Descricao_Servico: 'Permuta Digital', Valor_Sugerido_Renovacao: 0
+    Descricao_Servico: 'Permuta Digital', Valor_Sugerido_Renovacao: 0, Origem: 'Parceria'
   }
 ];
 
@@ -94,6 +94,11 @@ export const ALL_COSTS: CostData[] = [
   { id: 'c4', Mes_Referencia: 'Janeiro/2026', Tipo_Custo: 'Canva', Valor_Mensal_BRL: 35, Ativo_no_Mes: true, Categoria: 'Operacional', Tipo: 'Fixo' },
   { id: 'c5', Mes_Referencia: 'Janeiro/2026', Tipo_Custo: 'CapCut', Valor_Mensal_BRL: 65.90, Ativo_no_Mes: true, Categoria: 'Operacional', Tipo: 'Fixo' },
   { id: 'c6', Mes_Referencia: 'Janeiro/2026', Tipo_Custo: 'Deslocamento', Valor_Mensal_BRL: 300, Ativo_no_Mes: true, Categoria: 'Operacional', Tipo: 'Variável' },
+];
+
+export const INITIAL_GROWTH_DATA: MonthlyGrowthData[] = [
+  { month: 'Dezembro/2025', adSpend: 500, leads: 45 },
+  { month: 'Janeiro/2026', adSpend: 1200, leads: 82 },
 ];
 
 export const MONTHS = ['Dezembro/2025', 'Janeiro/2026'];

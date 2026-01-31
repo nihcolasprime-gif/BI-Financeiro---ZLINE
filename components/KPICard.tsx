@@ -1,5 +1,7 @@
+
 import React from 'react';
 import { formatCurrency, formatPercent } from '../utils';
+import { ArrowRight } from 'lucide-react';
 
 interface KPICardProps {
   title: string;
@@ -8,6 +10,8 @@ interface KPICardProps {
   colorCondition?: 'positive-green' | 'always-neutral' | 'cost-warning' | 'alert-low';
   icon?: React.ReactNode;
   privacyMode?: boolean;
+  onClick?: () => void;
+  subtitle?: string;
 }
 
 const KPICard: React.FC<KPICardProps> = ({ 
@@ -16,11 +20,13 @@ const KPICard: React.FC<KPICardProps> = ({
   type = 'currency', 
   colorCondition = 'positive-green',
   icon,
-  privacyMode = false
+  privacyMode = false,
+  onClick,
+  subtitle
 }) => {
   // Styles configuration
   let theme = {
-    text: 'text-[#06283D]',
+    text: 'text-slate-800',
     iconBg: 'from-slate-700 to-slate-900',
     iconShadow: 'shadow-slate-500/20',
     accentLine: 'bg-slate-300',
@@ -50,7 +56,7 @@ const KPICard: React.FC<KPICardProps> = ({
     }
   } else if (colorCondition === 'cost-warning') {
     theme = {
-      text: 'text-[#06283D]',
+      text: 'text-slate-800',
       iconBg: 'from-amber-400 to-amber-600',
       iconShadow: 'shadow-amber-500/40',
       accentLine: 'bg-amber-400',
@@ -70,38 +76,43 @@ const KPICard: React.FC<KPICardProps> = ({
 
   return (
     <div 
+      onClick={onClick}
       className={`
         relative group
-        p-5 md:p-6 rounded-2xl md:rounded-3xl
+        p-5 md:p-6 rounded-2xl md:rounded-[2rem]
         bg-white/70 backdrop-blur-2xl
         border ${theme.border}
         shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)]
-        hover:shadow-[0_15px_30px_-10px_rgba(0,0,0,0.1)]
+        hover:shadow-[0_20px_40px_-12px_rgba(0,0,0,0.1)]
         hover:-translate-y-1 hover:bg-white/90
         transition-all duration-300 ease-out
         overflow-hidden
         flex flex-col justify-between
-        h-auto min-h-[140px] md:h-40
+        h-auto min-h-[150px]
+        ${onClick ? 'cursor-pointer' : ''}
       `}
     >
-      <div className={`absolute -right-6 -top-6 w-32 h-32 rounded-full blur-3xl ${theme.glow} transition-all duration-500 pointer-events-none`}></div>
+      <div className={`absolute -right-6 -top-6 w-32 h-32 rounded-full blur-3xl ${theme.glow} transition-all duration-500 pointer-events-none group-hover:scale-125`}></div>
 
       <div className="flex justify-between items-start z-10 mb-4 md:mb-0">
-        <div className="flex flex-col gap-1">
-           <h3 className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest transition-colors group-hover:text-slate-500">{title}</h3>
-           <div className={`h-1 w-6 rounded-full ${theme.accentLine} group-hover:w-10 transition-all duration-300`}></div>
+        <div className="flex flex-col gap-1.5">
+           <h3 className="text-[10px] md:text-[11px] font-bold text-slate-400 uppercase tracking-widest transition-colors group-hover:text-slate-600 flex items-center gap-1">
+             {title}
+             {onClick && <ArrowRight size={10} className="opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-indigo-500" />}
+           </h3>
+           <div className={`h-1 w-6 rounded-full ${theme.accentLine} group-hover:w-12 transition-all duration-500 ease-out`}></div>
         </div>
 
         <div className={`
           flex items-center justify-center
-          w-9 h-9 md:w-10 md:h-10 rounded-xl
+          w-10 h-10 md:w-11 md:h-11 rounded-2xl
           bg-gradient-to-br ${theme.iconBg}
           text-white
           shadow-lg ${theme.iconShadow}
-          transform group-hover:scale-110 group-hover:rotate-6
+          transform group-hover:scale-110 group-hover:rotate-3
           transition-transform duration-300
         `}>
-          {icon ? React.cloneElement(icon as React.ReactElement<any>, { size: 16, strokeWidth: 2.5 }) : null}
+          {icon ? React.cloneElement(icon as React.ReactElement<any>, { size: 18, strokeWidth: 2.5 }) : null}
         </div>
       </div>
       
@@ -113,6 +124,9 @@ const KPICard: React.FC<KPICardProps> = ({
               formattedValue()
             )}
         </div>
+        {subtitle && (
+          <p className="text-[10px] font-bold text-slate-400 mt-1">{subtitle}</p>
+        )}
       </div>
     </div>
   );

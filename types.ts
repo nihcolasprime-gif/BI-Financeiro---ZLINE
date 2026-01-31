@@ -10,6 +10,7 @@ export interface ClientContract {
   Dia_Pagamento?: number;
   Descricao_Servico?: string;
   Valor_Sugerido_Renovacao?: number;
+  Origem?: 'Indicação' | 'Ads' | 'Outbound' | 'Orgânico' | 'Parceria' | 'Outros';
 }
 
 export interface ClientMonthlyResult {
@@ -22,6 +23,12 @@ export interface ClientMonthlyResult {
   Conteudos_Nao_Entregues: number;
   Status_Mensal: 'Ativo' | 'Inativo'; // Se o cliente operou neste mês
   Status_Detalhe?: string;
+}
+
+export interface MonthlyGrowthData {
+  month: string;
+  adSpend: number; // Investimento em Marketing (Ads + Ferramentas de Venda)
+  leads?: number;
 }
 
 // --- VIEWS (UI Consumption) ---
