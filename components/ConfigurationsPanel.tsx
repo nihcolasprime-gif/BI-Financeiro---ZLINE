@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { 
-  FileDown, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Trash2, PlusCircle, Link2, Trash, Plus, Landmark, Calendar, RefreshCw, Sheet, XCircle, Ban, TrendingUp, Info
+  FileDown, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Trash2, PlusCircle, Link2, Trash, Plus, Landmark, Calendar, RefreshCw, Sheet, XCircle, Ban, TrendingUp, Info, Lightbulb, Users
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -25,6 +25,7 @@ interface ConfigurationsPanelProps {
   onUpdateGrowth?: (data: MonthlyGrowthData[]) => void;
   selectedMonth: string;
   privacyMode?: boolean;
+  churn?: number; // Recebendo churn calculado
 }
 
 // --- PERFORMANCE COMPONENTS ---
@@ -95,7 +96,7 @@ const TabSubBtn = ({ active, label, onClick }: { active: boolean; label: string;
 export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
   viewClients, contracts, monthlyResults, allCosts, months, settings, growthData = [], selectedMonth,
   onUpdateContracts, onUpdateResults, onUpdateCosts, onUpdateSettings, onUpdateMonths, onUpdateGrowth,
-  privacyMode = false
+  privacyMode = false, churn = 0
 }) => {
   const [activeSection, setActiveSection] = useState<'clients' | 'costs' | 'global'>('clients');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -109,26 +110,69 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
     growthData.find(g => g.month === selectedMonth) || { month: selectedMonth, adSpend: 0, leads: 0 },
   [growthData, selectedMonth]);
 
-  const audit = useMemo(() => {
+  // --- MARKET INTELLIGENCE BRAIN ---
+  const intelligence = useMemo(() => {
     const grossRevenue = viewClients.reduce((s, c) => s + (Number(c.Receita_Mensal_BRL) || 0), 0);
     const netRevenue = grossRevenue * (1 - settings.taxRate);
     const activeCostsInMonth = monthCosts.filter(c => c.Ativo_no_Mes);
     const totalCost = activeCostsInMonth.reduce((s, c) => s + (Number(c.Valor_Mensal_BRL) || 0), 0);
     const margin = netRevenue !== 0 ? (netRevenue - totalCost) / netRevenue : 0;
     
-    const issues: { type: 'error' | 'warning' | 'info', message: string, icon: any }[] = [];
-    if (margin < 0) issues.push({ type: 'error', message: 'Margem Negativa Detectada.', icon: <AlertCircle size={14} /> });
-    else if (margin < settings.targetMargin) issues.push({ type: 'warning', message: `Margem abaixo do alvo (${formatPercent(settings.targetMargin)}).`, icon: <AlertTriangle size={14} /> });
+    // Benchmarks (Defaults if missing)
+    const bm = settings.benchmarks || { maxChurn: 0.05, minMargin: 0.20, minLtvCac: 3.0, safeCapacityLimit: 0.85 };
 
-    const contractsWithResults = new Set(viewClients.map(c => c.contractId));
-    const missingContracts = contracts.filter(c => c.Status_Contrato === 'Ativo' && !contractsWithResults.has(c.id)).length;
+    const insights: { type: 'danger' | 'warning' | 'opportunity', title: string, message: string, icon: any }[] = [];
     
-    if (missingContracts > 0) {
-      issues.push({ type: 'info', message: `${missingContracts} contratos ativos sem lançamento neste mês.`, icon: <RefreshCw size={14} /> });
+    // 1. Margin Analysis
+    if (margin < 0) {
+       insights.push({ 
+           type: 'danger', 
+           title: 'Prejuízo Operacional',
+           message: 'Sua operação está queimando caixa. Revise custos fixos imediatamente ou aumente o ticket médio.',
+           icon: <AlertCircle size={16} /> 
+       });
+    } else if (margin < bm.minMargin) {
+       insights.push({ 
+           type: 'warning', 
+           title: 'Margem Abaixo do Mercado',
+           message: `Sua margem (${formatPercent(margin)}) está inferior à base configurada (${formatPercent(bm.minMargin)}). Considere reajustar contratos antigos.`,
+           icon: <TrendingUp size={16} /> 
+       });
+    } else if (margin > (bm.minMargin + 0.15)) {
+        insights.push({
+            type: 'opportunity',
+            title: 'Alta Eficiência Financeira',
+            message: 'Sua margem está excelente. É um bom momento para reinvestir em crescimento (Ads) sem comprometer o caixa.',
+            icon: <Lightbulb size={16} />
+        });
     }
 
-    return { isHealthy: issues.filter(i => i.type === 'error').length === 0, issues };
-  }, [viewClients, monthCosts, settings, contracts]);
+    // 2. Churn Analysis
+    if (churn > bm.maxChurn) {
+        insights.push({
+            type: 'danger',
+            title: 'Risco de Churn Elevado',
+            message: `Sua taxa de perda (${formatPercent(churn)}) supera o limite seguro (${formatPercent(bm.maxChurn)}). Foque em Customer Success e retenção antes de vender mais.`,
+            icon: <Users size={16} />
+        });
+    }
+
+    // 3. Operational Consistency Check
+    const contractsWithResults = new Set(viewClients.map(c => c.contractId));
+    const missingContracts = contracts.filter(c => c.Status_Contrato === 'Ativo' && !contractsWithResults.has(c.id)).length;
+    if (missingContracts > 0) {
+      insights.push({ 
+          type: 'warning', 
+          title: 'Inconsistência de Dados',
+          message: `${missingContracts} contratos ativos não foram lançados neste mês. Sua receita pode estar subestimada.`,
+          icon: <RefreshCw size={16} /> 
+      });
+    }
+
+    const isHealthy = insights.filter(i => i.type === 'danger').length === 0;
+
+    return { isHealthy, insights };
+  }, [viewClients, monthCosts, settings, contracts, churn]);
 
   const handleUpdateContract = useCallback((contractId: string, field: keyof ClientContract, value: any) => {
     onUpdateContracts(contracts.map(c => c.id === contractId ? { ...c, [field]: value } : c));
@@ -365,27 +409,51 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
             </button>
           </div>
         </div>
-        <div className={`glass-panel p-6 rounded-[32px] border-none flex items-center gap-4 shadow-lg ${audit.isHealthy ? 'bg-emerald-50/50' : 'bg-rose-50/50'}`}>
-           <div className={`p-3 rounded-2xl ${audit.isHealthy ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
-             {audit.isHealthy ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
+        <div className={`glass-panel p-6 rounded-[32px] border-none flex items-center gap-4 shadow-lg ${intelligence.isHealthy ? 'bg-emerald-50/50' : 'bg-white/80'}`}>
+           <div className={`p-3 rounded-2xl ${intelligence.isHealthy ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+             {intelligence.isHealthy ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
            </div>
            <div>
-             <p className="text-[10px] font-black opacity-60 uppercase">Auditoria</p>
-             <p className={`text-sm font-black ${audit.isHealthy ? 'text-emerald-700' : 'text-rose-700'}`}>
-               {audit.isHealthy ? 'Sistema Saudável' : 'Atenção Requerida'}
+             <p className="text-[10px] font-black opacity-60 uppercase">Inteligência de Mercado</p>
+             <p className={`text-sm font-black ${intelligence.isHealthy ? 'text-emerald-700' : 'text-slate-700'}`}>
+               {intelligence.insights.length > 0 ? `${intelligence.insights.length} Insights` : 'Operação Estável'}
              </p>
            </div>
         </div>
       </div>
 
-      {audit.issues.length > 0 && (
-         <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex flex-col gap-2">
-            {audit.issues.map((issue, idx) => (
-               <div key={idx} className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                  <span className={issue.type === 'error' ? 'text-rose-500' : 'text-amber-500'}>{issue.icon}</span>
-                  {issue.message}
-               </div>
-            ))}
+      {/* INTELLIGENCE ALERTS SECTION */}
+      {intelligence.insights.length > 0 && (
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {intelligence.insights.map((insight, idx) => {
+               let bgClass = 'bg-slate-50 border-slate-100';
+               let textClass = 'text-slate-700';
+               let iconClass = 'text-slate-500';
+
+               if (insight.type === 'danger') {
+                   bgClass = 'bg-rose-50 border-rose-100';
+                   textClass = 'text-rose-800';
+                   iconClass = 'text-rose-500';
+               } else if (insight.type === 'warning') {
+                   bgClass = 'bg-amber-50 border-amber-100';
+                   textClass = 'text-amber-800';
+                   iconClass = 'text-amber-500';
+               } else if (insight.type === 'opportunity') {
+                   bgClass = 'bg-indigo-50 border-indigo-100';
+                   textClass = 'text-indigo-800';
+                   iconClass = 'text-indigo-500';
+               }
+
+               return (
+                   <div key={idx} className={`${bgClass} border p-4 rounded-2xl flex items-start gap-3 shadow-sm`}>
+                       <div className={`mt-0.5 ${iconClass}`}>{insight.icon}</div>
+                       <div>
+                           <p className={`text-xs font-black uppercase mb-1 ${textClass}`}>{insight.title}</p>
+                           <p className="text-xs font-medium opacity-80 leading-relaxed">{insight.message}</p>
+                       </div>
+                   </div>
+               )
+            })}
          </div>
       )}
 
@@ -536,6 +604,36 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                   <div>
                     <label className="text-xs font-bold text-slate-500 block mb-2">Imposto (%)</label>
                     <input type="number" step="0.01" value={settings.taxRate} onChange={e => onUpdateSettings({...settings, taxRate: parseFloat(e.target.value)})} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
+                  </div>
+
+                  {/* BENCHMARKS INPUTS - ATUALIZANDO ALERTAS E RISCOS */}
+                  <div className="pt-4 border-t border-slate-100">
+                      <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Métricas de Mercado (Benchmarks)</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-bold text-slate-500 block mb-2">Máximo Churn (%)</label>
+                            <input 
+                                type="number" 
+                                step="0.01" 
+                                value={(settings.benchmarks?.maxChurn || 0.05)} 
+                                onChange={e => onUpdateSettings({...settings, benchmarks: { ...settings.benchmarks, maxChurn: parseFloat(e.target.value) }})} 
+                                className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-slate-500 block mb-2">Margem Mínima (%)</label>
+                            <input 
+                                type="number" 
+                                step="0.01" 
+                                value={(settings.benchmarks?.minMargin || 0.20)} 
+                                onChange={e => onUpdateSettings({...settings, benchmarks: { ...settings.benchmarks, minMargin: parseFloat(e.target.value) }})} 
+                                className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" 
+                            />
+                          </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-2 leading-tight">
+                          Esses valores alimentam o <strong>Painel de Inteligência</strong>. Altere conforme a realidade do seu nicho para receber alertas mais precisos.
+                      </p>
                   </div>
                   
                   <div className="pt-4 border-t border-slate-100 mt-4">

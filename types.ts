@@ -60,6 +60,13 @@ export interface CostData {
   Tipo?: 'Fixo' | 'Variável' | 'Extraordinário';
 }
 
+export interface MarketBenchmarks {
+  maxChurn: number; // ex: 0.05 (5%)
+  minMargin: number; // ex: 0.20 (20%)
+  minLtvCac: number; // ex: 3.0
+  safeCapacityLimit: number; // ex: 0.85 (85%)
+}
+
 export interface GlobalSettings {
   taxRate: number;
   targetMargin: number;
@@ -70,6 +77,7 @@ export interface GlobalSettings {
   tolerancePercentage: number;
   oneTimeAdjustments: number;
   manualCostPerContentOverride: number;
+  benchmarks: MarketBenchmarks; // Nova configuração de mercado
 }
 
 export interface FilterState {

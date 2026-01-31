@@ -1,9 +1,9 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, DollarSign, Activity, History, Users, TrendingDown,
   Trophy, Eye, EyeOff, Settings, AlertCircle, Search, X, 
-  FileText, Calendar, Clock, ArrowUpRight, TrendingUp, Filter, Target, Repeat, BarChart3, Rocket, Wrench, Briefcase, Calculator, PieChart, Layers
+  FileText, Calendar, Clock, ArrowUpRight, TrendingUp, Filter, Target, Repeat, BarChart3, Rocket, Wrench, Briefcase, Calculator, PieChart, Layers, RotateCcw
 } from 'lucide-react';
 import { INITIAL_CONTRACTS, INITIAL_MONTHLY_RESULTS, ALL_COSTS as INITIAL_COSTS, MONTHS as INITIAL_MONTHS, INITIAL_GROWTH_DATA, STANDARD_MONTHS } from './constants';
 import KPICard from './components/KPICard';
@@ -104,16 +104,36 @@ const ScenarioSimulator = ({ currentNetResult, currentRevenue, currentCost }: { 
     const [costVar, setCostVar] = useState(0);
     const [churnVar, setChurnVar] = useState(0); // Simulating revenue loss
 
+    const handleReset = () => {
+        setPriceVar(0);
+        setCostVar(0);
+        setChurnVar(0);
+    };
+
     const simulatedRevenue = currentRevenue * (1 + (priceVar / 100)) * (1 - (churnVar / 100));
     const simulatedCost = currentCost * (1 + (costVar / 100));
     const simulatedResult = simulatedRevenue - simulatedCost;
     const variation = simulatedResult - currentNetResult;
 
+    // Small threshold to prevent -0,00 or tiny floating point errors
+    const cleanVariation = Math.abs(variation) < 0.01 ? 0 : variation;
+
     return (
-        <div className="glass-panel p-8 rounded-[40px] shadow-xl h-full">
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                <Activity size={18} className="text-emerald-600"/> Playground de Cenários
-            </h3>
+        <div className="glass-panel p-8 rounded-[40px] shadow-xl h-full flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                    <Activity size={18} className="text-emerald-600"/> Playground de Cenários
+                </h3>
+                {(priceVar !== 0 || costVar !== 0 || churnVar !== 0) && (
+                    <button 
+                        onClick={handleReset}
+                        className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-600 bg-slate-100 px-2 py-1 rounded-lg transition-all hover:bg-slate-200"
+                        title="Resetar Cenário"
+                    >
+                        <RotateCcw size={10} /> Reset
+                    </button>
+                )}
+            </div>
             
             <div className="space-y-6 mb-8">
                 <div>
@@ -146,8 +166,8 @@ const ScenarioSimulator = ({ currentNetResult, currentRevenue, currentCost }: { 
                 </div>
                 <div className="text-right">
                     <p className="text-[10px] font-bold text-slate-400 uppercase">Impacto</p>
-                    <p className={`text-lg font-black ${variation >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {variation > 0 ? '+' : ''}{formatCurrency(variation)}
+                    <p className={`text-lg font-black ${cleanVariation >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {cleanVariation > 0 ? '+' : ''}{formatCurrency(cleanVariation)}
                     </p>
                 </div>
             </div>
@@ -201,25 +221,54 @@ const App: React.FC = () => {
       seasonalMultiplier: 1,
       tolerancePercentage: 0.05,
       oneTimeAdjustments: 0,
-      manualCostPerContentOverride: 0
+      manualCostPerContentOverride: 0,
+      // Default Benchmarks
+      benchmarks: {
+        maxChurn: 0.05, // 5%
+        minMargin: 0.20, // 20%
+        minLtvCac: 3.0, // 3x
+        safeCapacityLimit: 0.85 // 85%
+      }
     };
-    return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
+    
+    // Deep merge para garantir que benchmarks exista mesmo se carregar do localStorage antigo
+    if (saved) {
+       const parsed = JSON.parse(saved);
+       return {
+         ...defaultSettings,
+         ...parsed,
+         benchmarks: { ...defaultSettings.benchmarks, ...(parsed.benchmarks || {}) }
+       };
+    }
+    return defaultSettings;
   });
 
   const [selectedMonth, setSelectedMonth] = useState<string>('');
 
   // Stable Sorted Months
   const sortedMonths = useMemo(() => sortMonths(availableMonths), [availableMonths]);
+  
+  // Reverse sorted for UX (Dropdown)
+  const dropdownMonths = useMemo(() => [...sortedMonths].reverse(), [sortedMonths]);
 
   // Initialize selectedMonth safely after availableMonths is loaded
   useEffect(() => {
-    if (!selectedMonth && sortedMonths.length > 0) {
-      setSelectedMonth(sortedMonths[sortedMonths.length - 1]);
+    if (!selectedMonth && dropdownMonths.length > 0) {
+      setSelectedMonth(dropdownMonths[0]); // Select newest month default
     } else if (sortedMonths.length > 0 && !sortedMonths.includes(selectedMonth)) {
       // If current selected month was deleted
-      setSelectedMonth(sortedMonths[sortedMonths.length - 1]);
+      setSelectedMonth(dropdownMonths[0]);
     }
-  }, [sortedMonths, selectedMonth]);
+  }, [dropdownMonths, selectedMonth, sortedMonths]);
+
+  // Handle Month Switch with specific logic
+  const handleMonthSwitch = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    const targetMonth = e.target.value;
+    if (availableMonths.includes(targetMonth)) {
+      setSelectedMonth(targetMonth);
+      // Optional: We can keep the search term or reset it. Keeping it is usually better for comparison.
+    }
+  }, [availableMonths]);
 
   // Persistência
   useEffect(() => {
@@ -388,8 +437,8 @@ const App: React.FC = () => {
             <div className="flex items-center gap-3 shrink-0 self-start md:self-auto">
               <div className="h-10 w-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-500/20">Z</div>
               <div className="hidden sm:block">
-                <h1 className="text-xl font-black text-slate-900">BI Financeiro</h1>
-                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Enterprise v4.5 (Consolidated)</p>
+                <h1 className="text-xl font-black text-slate-900">BI Growth</h1>
+                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Performance & Intelligence</p>
               </div>
             </div>
 
@@ -418,8 +467,8 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <div className="bg-white/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/60 shadow-sm hover:shadow-md transition-all group flex items-center gap-2">
                     <Calendar size={14} className="text-slate-400 group-hover:text-indigo-500 transition-colors" />
-                    <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-transparent text-xs font-black text-slate-700 border-none focus:ring-0 cursor-pointer uppercase tracking-tight outline-none appearance-none">
-                        {brain.months.map(m => <option key={m} value={m}>{m}</option>)}
+                    <select value={selectedMonth} onChange={handleMonthSwitch} className="bg-transparent text-xs font-black text-slate-700 border-none focus:ring-0 cursor-pointer uppercase tracking-tight outline-none appearance-none">
+                        {dropdownMonths.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                   </div>
 
@@ -511,7 +560,7 @@ const App: React.FC = () => {
                          <div className="lg:col-span-4 flex flex-col gap-8">
                             <ScenarioSimulator 
                                 currentNetResult={rawView?.netResult || 0} 
-                                currentRevenue={rawView?.grossRevenue || 0}
+                                currentRevenue={rawView?.netRevenue || 0}
                                 currentCost={rawView?.totalCost || 0}
                             />
                          </div>
@@ -712,6 +761,7 @@ const App: React.FC = () => {
                 onUpdateMonths={setAvailableMonths}
                 onUpdateGrowth={setGrowthData}
                 privacyMode={isPrivacyMode}
+                churn={rawView?.churn || 0}
               />
             )}
           </>
