@@ -36,6 +36,7 @@ const ProLaboreCalculator = ({ grossRevenue, currentProfit, costs, taxRate }: { 
     
     // 1. Detect Current Pro-Labore from Costs (REAL DATA)
     const currentProLaboreTotal = useMemo(() => {
+        if (!costs || costs.length === 0) return 0;
         return costs
             .filter(c => {
                 const name = c.Tipo_Custo.toLowerCase();
@@ -624,7 +625,7 @@ const App: React.FC = () => {
                             <ProLaboreCalculator 
                                 grossRevenue={rawView?.grossRevenue || 0}
                                 currentProfit={rawView?.netResult || 0}
-                                costs={currentView.costs}
+                                costs={rawView?.costs || []}
                                 taxRate={settings.taxRate}
                             />
                             <ScenarioSimulator 
