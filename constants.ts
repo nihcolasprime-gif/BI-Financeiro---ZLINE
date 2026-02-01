@@ -75,8 +75,14 @@ export const INITIAL_MONTHLY_RESULTS: ClientMonthlyResult[] = [
   { id: 'm-jan-3', contractId: 'c-deivid', Mes_Referencia: 'Janeiro/2026', Receita_Mensal_BRL: 1000, Conteudos_Contratados: 36, Conteudos_Entregues: 35, Conteudos_Nao_Entregues: 1, Status_Mensal: 'Ativo' },
   { id: 'm-jan-4', contractId: 'c-olimpia', Mes_Referencia: 'Janeiro/2026', Receita_Mensal_BRL: 900, Conteudos_Contratados: 30, Conteudos_Entregues: 16, Conteudos_Nao_Entregues: 14, Status_Mensal: 'Ativo' },
   { id: 'm-jan-5', contractId: 'c-alex', Mes_Referencia: 'Janeiro/2026', Receita_Mensal_BRL: 560, Conteudos_Contratados: 16, Conteudos_Entregues: 5, Conteudos_Nao_Entregues: 11, Status_Mensal: 'Ativo' },
-  // AlexandreChurned:
-  { id: 'm-jan-6', contractId: 'c-alexandre', Mes_Referencia: 'Janeiro/2026', Receita_Mensal_BRL: 850, Conteudos_Contratados: 20, Conteudos_Entregues: 2, Conteudos_Nao_Entregues: 18, Status_Mensal: 'Inativo', Status_Detalhe: 'Desligado no mês' }
+  { id: 'm-jan-6', contractId: 'c-alexandre', Mes_Referencia: 'Janeiro/2026', Receita_Mensal_BRL: 850, Conteudos_Contratados: 20, Conteudos_Entregues: 2, Conteudos_Nao_Entregues: 18, Status_Mensal: 'Inativo', Status_Detalhe: 'Desligado no mês' },
+
+  // FEVEREIRO 2026 (Simulação de Retomada)
+  { id: 'm-fev-1', contractId: 'c-elbeton', Mes_Referencia: 'Fevereiro/2026', Receita_Mensal_BRL: 550, Conteudos_Contratados: 10, Conteudos_Entregues: 10, Conteudos_Nao_Entregues: 0, Status_Mensal: 'Ativo' },
+  { id: 'm-fev-2', contractId: 'c-deivid', Mes_Referencia: 'Fevereiro/2026', Receita_Mensal_BRL: 1850, Conteudos_Contratados: 36, Conteudos_Entregues: 36, Conteudos_Nao_Entregues: 0, Status_Mensal: 'Ativo' },
+  { id: 'm-fev-3', contractId: 'c-olimpia', Mes_Referencia: 'Fevereiro/2026', Receita_Mensal_BRL: 1100, Conteudos_Contratados: 30, Conteudos_Entregues: 30, Conteudos_Nao_Entregues: 0, Status_Mensal: 'Ativo' },
+  { id: 'm-fev-4', contractId: 'c-alex', Mes_Referencia: 'Fevereiro/2026', Receita_Mensal_BRL: 650, Conteudos_Contratados: 16, Conteudos_Entregues: 16, Conteudos_Nao_Entregues: 0, Status_Mensal: 'Ativo' },
+  { id: 'm-fev-5', contractId: 'c-renan', Mes_Referencia: 'Fevereiro/2026', Receita_Mensal_BRL: 800, Conteudos_Contratados: 14, Conteudos_Entregues: 14, Conteudos_Nao_Entregues: 0, Status_Mensal: 'Ativo' }
 ];
 
 // --- COSTS WITH CATEGORIES ---
@@ -94,11 +100,16 @@ export const ALL_COSTS: CostData[] = [
   { id: 'c4', Mes_Referencia: 'Janeiro/2026', Tipo_Custo: 'Canva', Valor_Mensal_BRL: 35, Ativo_no_Mes: true, Categoria: 'Operacional', Tipo: 'Fixo' },
   { id: 'c5', Mes_Referencia: 'Janeiro/2026', Tipo_Custo: 'CapCut', Valor_Mensal_BRL: 65.90, Ativo_no_Mes: true, Categoria: 'Operacional', Tipo: 'Fixo' },
   { id: 'c6', Mes_Referencia: 'Janeiro/2026', Tipo_Custo: 'Deslocamento', Valor_Mensal_BRL: 300, Ativo_no_Mes: true, Categoria: 'Operacional', Tipo: 'Variável' },
+  // Fevereiro
+  { id: 'c-fev-1', Mes_Referencia: 'Fevereiro/2026', Tipo_Custo: 'Pro-labore', Valor_Mensal_BRL: 3000, Ativo_no_Mes: true, Categoria: 'Administrativo', Tipo: 'Fixo' },
+  { id: 'c-fev-2', Mes_Referencia: 'Fevereiro/2026', Tipo_Custo: 'Softwares', Valor_Mensal_BRL: 200, Ativo_no_Mes: true, Categoria: 'Operacional', Tipo: 'Fixo' }
 ];
 
+// Dados iniciais de crescimento zerados para que o usuário preencha o real em Settings
 export const INITIAL_GROWTH_DATA: MonthlyGrowthData[] = [
-  { month: 'Dezembro/2025', adSpend: 500, leads: 45 },
-  { month: 'Janeiro/2026', adSpend: 1200, leads: 82 },
+  { month: 'Dezembro/2025', adSpend: 0, leads: 0 },
+  { month: 'Janeiro/2026', adSpend: 0, leads: 0 },
+  { month: 'Fevereiro/2026', adSpend: 0, leads: 0 },
 ];
 
-export const MONTHS = ['Dezembro/2025', 'Janeiro/2026'];
+export const MONTHS = ['Dezembro/2025', 'Janeiro/2026', 'Fevereiro/2026'];

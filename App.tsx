@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, DollarSign, Activity, History, Users, TrendingDown,
   Trophy, Eye, EyeOff, Settings, AlertCircle, Search, X, 
-  FileText, Calendar, Clock, ArrowUpRight, TrendingUp, Filter, Target, Repeat, BarChart3, Rocket, Wrench, Briefcase, Calculator, PieChart, Layers, RotateCcw
+  FileText, Calendar, Clock, ArrowUpRight, TrendingUp, Filter, Target, Repeat, BarChart3, Rocket, Wrench, Briefcase, Calculator, PieChart, Layers, RotateCcw, Wallet, ArrowRight, Check
 } from 'lucide-react';
 import { INITIAL_CONTRACTS, INITIAL_MONTHLY_RESULTS, ALL_COSTS as INITIAL_COSTS, MONTHS as INITIAL_MONTHS, INITIAL_GROWTH_DATA, STANDARD_MONTHS } from './constants';
 import KPICard from './components/KPICard';
@@ -30,6 +30,109 @@ const STORAGE_KEYS = {
 
 // --- SUB-COMPONENTS FOR TOOLS ---
 
+const ProLaboreCalculator = ({ grossRevenue, currentProfit, costs, taxRate }: { grossRevenue: number, currentProfit: number, costs: CostData[], taxRate: number }) => {
+    const [partners, setPartners] = useState(1);
+    const [roleLevel, setRoleLevel] = useState<'operacional' | 'estrategico'>('operacional');
+    
+    // 1. Detect Current Pro-Labore from Costs (REAL DATA)
+    const currentProLaboreTotal = useMemo(() => {
+        return costs
+            .filter(c => {
+                const name = c.Tipo_Custo.toLowerCase();
+                return (name.includes('pro-labore') || name.includes('pro labore') || name.includes('sócio') || name.includes('socio')) && c.Ativo_no_Mes;
+            })
+            .reduce((acc, curr) => acc + curr.Valor_Mensal_BRL, 0);
+    }, [costs]);
+
+    // 2. Market Logic
+    const marketPercent = useMemo(() => {
+        if (roleLevel === 'operacional') return { min: 0.15, max: 0.25, ideal: 0.20 }; // 20% da Receita Bruta
+        return { min: 0.10, max: 0.15, ideal: 0.12 }; // 12% da Receita Bruta
+    }, [roleLevel]);
+
+    const suggestedTotal = grossRevenue * marketPercent.ideal;
+    
+    // 3. Impact Simulation
+    // Impacto no CAIXA = Diferença entre o que pago hoje vs Sugerido
+    const cashImpact = currentProLaboreTotal - suggestedTotal; // Se positivo, sobra caixa. Se negativo, falta.
+    const newProfit = currentProfit + cashImpact; 
+    
+    // Safety for margins
+    const netRevenue = grossRevenue * (1 - taxRate);
+    const currentMargin = netRevenue > 0 ? currentProfit / netRevenue : 0;
+    const newMargin = netRevenue > 0 ? newProfit / netRevenue : 0;
+
+    return (
+        <div className="glass-panel p-6 rounded-[32px] shadow-xl h-full flex flex-col bg-white">
+            <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                    <Wallet size={18} className="text-emerald-600"/> Análise de Pro-Labore
+                </h3>
+                <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-lg">Dados Reais</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                     <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Atual (Lançado)</p>
+                     <p className="text-lg font-black text-slate-800">{formatCurrency(currentProLaboreTotal)}</p>
+                     {currentProLaboreTotal === 0 && <p className="text-[9px] text-rose-500 font-bold mt-1">Não identificado nos custos</p>}
+                </div>
+                <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
+                     <p className="text-[10px] font-black text-emerald-600 uppercase mb-1">Sugerido ({formatPercent(marketPercent.ideal)})</p>
+                     <p className="text-lg font-black text-emerald-800">{formatCurrency(suggestedTotal)}</p>
+                </div>
+            </div>
+
+            {/* Controls */}
+            <div className="space-y-4 mb-6">
+                <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Perfil dos Sócios</label>
+                    <div className="grid grid-cols-2 gap-2">
+                         <button 
+                            onClick={() => setRoleLevel('operacional')}
+                            className={`p-2 rounded-xl text-xs font-bold transition-all border ${roleLevel === 'operacional' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'}`}
+                         >
+                            Operacional
+                         </button>
+                         <button 
+                            onClick={() => setRoleLevel('estrategico')}
+                            className={`p-2 rounded-xl text-xs font-bold transition-all border ${roleLevel === 'estrategico' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'}`}
+                         >
+                            Estratégico
+                         </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Impact Analysis */}
+            <div className="mt-auto bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                <p className="text-[10px] font-black text-slate-400 uppercase mb-3 flex items-center gap-1">
+                    <Activity size={12} /> Impacto no Resultado Líquido
+                </p>
+                
+                <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 font-bold">Margem Atual:</span>
+                        <span className={`font-black ${currentMargin < 0 ? 'text-rose-500' : 'text-slate-700'}`}>{formatPercent(currentMargin)}</span>
+                    </div>
+                    
+                    <div className="h-px bg-slate-200 w-full my-1"></div>
+
+                    <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 font-bold">Nova Margem (Simulada):</span>
+                        <div className="text-right">
+                             <span className={`font-black ${newMargin < 0.1 ? 'text-rose-600' : 'text-emerald-600'}`}>{formatPercent(newMargin)}</span>
+                             <span className="text-[9px] text-slate-400 block">
+                                {newProfit > currentProfit ? 'Aumento de Lucro' : 'Redução de Lucro'}
+                             </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 const MarkupCalculator = () => {
     const [custoHora, setCustoHora] = useState(50);
     const [horas, setHoras] = useState(10);
@@ -38,61 +141,53 @@ const MarkupCalculator = () => {
     const [custosExtras, setCustosExtras] = useState(0);
 
     const custoBase = (custoHora * horas) + custosExtras;
-    // Preço = Custo / (1 - (Imposto + Margem))
-    // Cuidado com divisão por zero
     const divisor = 1 - ((imposto + margemAlvo) / 100);
     const precoSugerido = divisor > 0 ? custoBase / divisor : 0;
     const lucroBruto = precoSugerido - custoBase - (precoSugerido * (imposto / 100));
 
     return (
-        <div className="glass-panel p-8 rounded-[40px] shadow-xl h-full">
+        <div className="glass-panel p-6 rounded-[32px] shadow-xl h-full flex flex-col bg-white">
             <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                <Calculator size={18} className="text-indigo-600"/> Calculadora de Markup (Precificação)
+                <Calculator size={18} className="text-indigo-600"/> Calculadora de Markup
             </h3>
-            <div className="grid grid-cols-1 gap-6">
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                          <label className="text-xs font-bold text-slate-500 block mb-1">Custo Hora (R$)</label>
-                          <input type="number" value={custoHora} onChange={e => setCustoHora(parseFloat(e.target.value) || 0)} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
+            <div className="space-y-4 flex-1">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Custo Hora</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-xs text-slate-400">R$</span>
+                        <input type="number" value={custoHora} onChange={e => setCustoHora(parseFloat(e.target.value) || 0)} className="w-full pl-8 p-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
                       </div>
-                      <div>
-                          <label className="text-xs font-bold text-slate-500 block mb-1">Horas Estimadas</label>
-                          <input type="number" value={horas} onChange={e => setHoras(parseFloat(e.target.value) || 0)} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
-                      </div>
+                  </div>
+                  <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Horas</label>
+                      <input type="number" value={horas} onChange={e => setHoras(parseFloat(e.target.value) || 0)} className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
+                  </div>
+                </div>
+                 <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Custos Extras</label>
+                    <input type="number" value={custosExtras} onChange={e => setCustosExtras(parseFloat(e.target.value) || 0)} className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Imposto (%)</label>
+                        <input type="number" value={imposto} onChange={e => setImposto(parseFloat(e.target.value) || 0)} className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
                     </div>
-                     <div>
-                        <label className="text-xs font-bold text-slate-500 block mb-1">Custos Extras (Softwares/Freelas)</label>
-                        <input type="number" value={custosExtras} onChange={e => setCustosExtras(parseFloat(e.target.value) || 0)} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 block mb-1">Imposto (%)</label>
-                            <input type="number" value={imposto} onChange={e => setImposto(parseFloat(e.target.value) || 0)} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 block mb-1">Margem Líquida (%)</label>
-                            <input type="number" value={margemAlvo} onChange={e => setMargemAlvo(parseFloat(e.target.value) || 0)} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
-                        </div>
+                    <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Margem (%)</label>
+                        <input type="number" value={margemAlvo} onChange={e => setMargemAlvo(parseFloat(e.target.value) || 0)} className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
                     </div>
                 </div>
-                <div className="bg-indigo-900 text-white rounded-3xl p-6 flex flex-col justify-center gap-4 relative overflow-hidden mt-auto">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
-                    <div>
-                        <p className="text-indigo-300 text-xs font-bold uppercase tracking-widest mb-1">Preço Sugerido</p>
-                        <p className="text-3xl font-black font-mono">{formatCurrency(precoSugerido)}</p>
-                    </div>
-                    <div className="h-px bg-white/20 w-full"></div>
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <p className="text-indigo-300 text-[10px] font-bold uppercase">Custo Total</p>
-                            <p className="text-sm font-bold">{formatCurrency(custoBase)}</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="text-indigo-300 text-[10px] font-bold uppercase">Lucro Projetado</p>
-                            <p className="text-sm font-bold text-emerald-400">{formatCurrency(lucroBruto)}</p>
-                        </div>
-                    </div>
+            </div>
+            
+            <div className="mt-6 bg-slate-900 rounded-2xl p-4 text-white">
+                <div className="flex justify-between items-end mb-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Preço Final</span>
+                    <span className="text-2xl font-black text-indigo-400">{formatCurrency(precoSugerido)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-700">
+                    <span className="text-slate-400">Lucro Líquido:</span>
+                    <span className="text-emerald-400 font-bold">{formatCurrency(lucroBruto)}</span>
                 </div>
             </div>
         </div>
@@ -114,59 +209,53 @@ const ScenarioSimulator = ({ currentNetResult, currentRevenue, currentCost }: { 
     const simulatedCost = currentCost * (1 + (costVar / 100));
     const simulatedResult = simulatedRevenue - simulatedCost;
     const variation = simulatedResult - currentNetResult;
-
-    // Small threshold to prevent -0,00 or tiny floating point errors
     const cleanVariation = Math.abs(variation) < 0.01 ? 0 : variation;
 
     return (
-        <div className="glass-panel p-8 rounded-[40px] shadow-xl h-full flex flex-col">
-            <div className="flex items-center justify-between mb-6">
+        <div className="glass-panel p-6 rounded-[32px] shadow-xl h-full flex flex-col bg-white">
+            <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
                 <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                    <Activity size={18} className="text-emerald-600"/> Playground de Cenários
+                    <Activity size={18} className="text-emerald-600"/> Cenários Futuros
                 </h3>
                 {(priceVar !== 0 || costVar !== 0 || churnVar !== 0) && (
-                    <button 
-                        onClick={handleReset}
-                        className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-600 bg-slate-100 px-2 py-1 rounded-lg transition-all hover:bg-slate-200"
-                        title="Resetar Cenário"
-                    >
+                    <button onClick={handleReset} className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-600 bg-slate-100 px-2 py-1 rounded-lg transition-all">
                         <RotateCcw size={10} /> Reset
                     </button>
                 )}
             </div>
             
-            <div className="space-y-6 mb-8">
+            <div className="space-y-5 mb-6">
                 <div>
-                     <div className="flex justify-between mb-2">
-                        <label className="text-xs font-bold text-slate-500">Aumento de Preço Global</label>
-                        <span className="text-xs font-black text-indigo-600">{priceVar > 0 ? '+' : ''}{priceVar}%</span>
+                     <div className="flex justify-between mb-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Preço / Ticket</label>
+                        <span className={`text-[10px] font-black ${priceVar > 0 ? 'text-emerald-600' : 'text-slate-600'}`}>{priceVar > 0 ? '+' : ''}{priceVar}%</span>
                      </div>
-                     <input type="range" min="-20" max="50" value={priceVar} onChange={e => setPriceVar(parseInt(e.target.value))} className="w-full accent-indigo-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                     <input type="range" min="-20" max="50" value={priceVar} onChange={e => setPriceVar(parseInt(e.target.value))} className="w-full accent-indigo-600 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer" />
                 </div>
                 <div>
-                     <div className="flex justify-between mb-2">
-                        <label className="text-xs font-bold text-slate-500">Variação de Custo Operacional</label>
-                        <span className="text-xs font-black text-rose-600">{costVar > 0 ? '+' : ''}{costVar}%</span>
+                     <div className="flex justify-between mb-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Custos Operacionais</label>
+                        <span className={`text-[10px] font-black ${costVar > 0 ? 'text-rose-600' : 'text-slate-600'}`}>{costVar > 0 ? '+' : ''}{costVar}%</span>
                      </div>
-                     <input type="range" min="-20" max="50" value={costVar} onChange={e => setCostVar(parseInt(e.target.value))} className="w-full accent-rose-500 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                     <input type="range" min="-20" max="50" value={costVar} onChange={e => setCostVar(parseInt(e.target.value))} className="w-full accent-rose-500 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer" />
                 </div>
                  <div>
-                     <div className="flex justify-between mb-2">
-                        <label className="text-xs font-bold text-slate-500">Perda de Receita (Churn)</label>
-                        <span className="text-xs font-black text-slate-600">{churnVar}%</span>
+                     <div className="flex justify-between mb-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Churn (Perda)</label>
+                        <span className="text-[10px] font-black text-slate-600">{churnVar}%</span>
                      </div>
-                     <input type="range" min="0" max="50" value={churnVar} onChange={e => setChurnVar(parseInt(e.target.value))} className="w-full accent-slate-500 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                     <input type="range" min="0" max="50" value={churnVar} onChange={e => setChurnVar(parseInt(e.target.value))} className="w-full accent-slate-400 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer" />
                 </div>
             </div>
 
-            <div className="bg-slate-50 rounded-2xl p-4 flex items-center justify-between border border-slate-200 mt-auto">
-                <div>
+            <div className="mt-auto bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                <div className="flex justify-between items-center mb-1">
                     <p className="text-[10px] font-bold text-slate-400 uppercase">Resultado Simulado</p>
-                    <p className={`text-xl font-black ${simulatedResult >= 0 ? 'text-slate-800' : 'text-rose-600'}`}>{formatCurrency(simulatedResult)}</p>
+                    <p className={`text-sm font-black ${simulatedResult >= 0 ? 'text-slate-800' : 'text-rose-600'}`}>{formatCurrency(simulatedResult)}</p>
                 </div>
-                <div className="text-right">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Impacto</p>
-                    <p className={`text-lg font-black ${cleanVariation >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                <div className="flex justify-between items-center">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Variação</p>
+                    <p className={`text-xs font-black ${cleanVariation >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {cleanVariation > 0 ? '+' : ''}{formatCurrency(cleanVariation)}
                     </p>
                 </div>
@@ -222,23 +311,17 @@ const App: React.FC = () => {
       tolerancePercentage: 0.05,
       oneTimeAdjustments: 0,
       manualCostPerContentOverride: 0,
-      // Default Benchmarks
       benchmarks: {
-        maxChurn: 0.05, // 5%
-        minMargin: 0.20, // 20%
-        minLtvCac: 3.0, // 3x
-        safeCapacityLimit: 0.85 // 85%
+        maxChurn: 0.05,
+        minMargin: 0.20,
+        minLtvCac: 3.0,
+        safeCapacityLimit: 0.85
       }
     };
     
-    // Deep merge para garantir que benchmarks exista mesmo se carregar do localStorage antigo
     if (saved) {
        const parsed = JSON.parse(saved);
-       return {
-         ...defaultSettings,
-         ...parsed,
-         benchmarks: { ...defaultSettings.benchmarks, ...(parsed.benchmarks || {}) }
-       };
+       return { ...defaultSettings, ...parsed, benchmarks: { ...defaultSettings.benchmarks, ...(parsed.benchmarks || {}) } };
     }
     return defaultSettings;
   });
@@ -256,17 +339,14 @@ const App: React.FC = () => {
     if (!selectedMonth && dropdownMonths.length > 0) {
       setSelectedMonth(dropdownMonths[0]); // Select newest month default
     } else if (sortedMonths.length > 0 && !sortedMonths.includes(selectedMonth)) {
-      // If current selected month was deleted
       setSelectedMonth(dropdownMonths[0]);
     }
   }, [dropdownMonths, selectedMonth, sortedMonths]);
 
-  // Handle Month Switch with specific logic
   const handleMonthSwitch = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const targetMonth = e.target.value;
     if (availableMonths.includes(targetMonth)) {
       setSelectedMonth(targetMonth);
-      // Optional: We can keep the search term or reset it. Keeping it is usually better for comparison.
     }
   }, [availableMonths]);
 
@@ -287,7 +367,6 @@ const App: React.FC = () => {
 
   // --- ENGINE INTEGRATION ---
   const brain = useMemo(() => {
-    // Optimization: Index results by month to avoid O(N*M) lookups inside the loop
     const resultsByMonth = new Map<string, ClientMonthlyResult[]>();
     monthlyResults.forEach(r => {
       if (!resultsByMonth.has(r.Mes_Referencia)) {
@@ -296,10 +375,8 @@ const App: React.FC = () => {
       resultsByMonth.get(r.Mes_Referencia)?.push(r);
     });
 
-    // 1. Run simulation for each month sequentially using stable sortedMonths
     const monthlyMetrics = sortedMonths.map((month, idx) => {
       const previousMonth = idx > 0 ? sortedMonths[idx - 1] : null;
-      // Fast O(1) lookup
       const prevResults = previousMonth ? (resultsByMonth.get(previousMonth) || []) : [];
       
       const result = calculateSimulation(month, contracts, monthlyResults, allCosts, settings, prevResults);
@@ -307,12 +384,11 @@ const App: React.FC = () => {
       return {
         month,
         ...result.kpis,
-        clients: result.clients, // View unificada
+        clients: result.clients,
         costs: result.costs
       };
     });
 
-    // 2. Smart Retention Calculation (Avg Duration of Active Contracts)
     let totalDurationMonths = 0;
     const activeContracts = contracts.filter(c => c.Status_Contrato === 'Ativo');
     const now = new Date();
@@ -321,13 +397,8 @@ const App: React.FC = () => {
       if (c.Data_Inicio) {
         const start = new Date(c.Data_Inicio);
         if (!isNaN(start.getTime())) {
-             // Ensure we don't calculate duration for future contracts
              if (start > now) return;
-
-             // Diff in months
              const monthsDiff = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
-             
-             // If Diff is 0 (started this month), it counts as 1 month of tenure
              totalDurationMonths += Math.max(1, monthsDiff + 1);
         }
       }
@@ -365,21 +436,18 @@ const App: React.FC = () => {
     };
   }, [rawView, searchTerm, statusFilter]);
 
-  // --- GROWTH METRICS CALCULATION ---
+  // --- GROWTH METRICS CALCULATION (REFACTORED) ---
   const growthMetrics = useMemo(() => {
       if (!currentView) return null;
       
+      // FIX: Ensure we are using the user-defined growth data, defaulting to 0 if not found
       const currentGrowthData = growthData.find(g => g.month === selectedMonth) || { adSpend: 0 };
       
       // Calculate New Clients in this Month
       const currentMonthComparable = getMonthComparableValue(selectedMonth);
       const newClientsCount = contracts.filter(c => {
           if (!c.Data_Inicio) return false;
-          // Simple heuristic: if the contract started in this month
-          // In real app, we might need more robust date parsing
-          // Here we assume Data_Inicio is YYYY-MM-DD
           const startDate = new Date(c.Data_Inicio);
-          // Construct month string from date to compare
           const startMonthName = STANDARD_MONTHS[startDate.getMonth()];
           const startYear = startDate.getFullYear();
           const startMonthComparable = getMonthComparableValue(`${startMonthName}/${startYear}`);
@@ -387,13 +455,10 @@ const App: React.FC = () => {
       }).length;
 
       const cac = newClientsCount > 0 ? currentGrowthData.adSpend / newClientsCount : 0;
-      // LTV = Avg Ticket * Avg Retention. 
-      // Note: We use the global Avg Retention, but current Month Avg Ticket
       const avgTicket = currentView.grossRevenue / Math.max(currentView.clients.filter(c => c.Status_Cliente === 'Ativo').length, 1);
       const ltv = avgTicket * brain.avgRetentionMonths;
       const ltvCacRatio = cac > 0 ? ltv / cac : 0;
 
-      // Origin Distribution
       const originCounts = currentView.clients.reduce((acc, client) => {
           const origin = client.Origem || 'Indicação';
           acc[origin] = (acc[origin] || 0) + 1;
@@ -416,12 +481,10 @@ const App: React.FC = () => {
     if (!dateString) return null;
     const targetDate = new Date(dateString);
     if (isNaN(targetDate.getTime())) return null;
-    
     const diffTime = targetDate.getTime() - new Date().getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  // --- SHORTCUT HANDLER ---
   const handleShortcut = (tab: TabType) => {
      setActiveTab(tab);
      window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -541,9 +604,9 @@ const App: React.FC = () => {
             {/* CONSOLIDATED TAB: GROWTH & TOOLS */}
             {activeTab === 'growth_tools' && growthMetrics && (
                 <div className="space-y-8">
-                     {/* KPIs de Growth */}
+                     {/* KPIs de Growth - AGORA CONECTADOS AO INPUT REAL */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <KPICard title="Investimento (Ads)" value={growthMetrics.adSpend} icon={<Target />} colorCondition="cost-warning" privacyMode={isPrivacyMode} />
+                        <KPICard title="Investimento (Ads)" value={growthMetrics.adSpend} icon={<Target />} colorCondition="cost-warning" privacyMode={isPrivacyMode} subtitle="Configurado em Ajustes" onClick={() => handleShortcut('settings')} />
                         <KPICard title="Novos Clientes" value={growthMetrics.newClientsCount} type="number" icon={<Users />} privacyMode={isPrivacyMode} />
                         <KPICard title="CAC (Custo Aquisição)" value={growthMetrics.cac} colorCondition="always-neutral" icon={<TrendingUp />} privacyMode={isPrivacyMode} />
                         <KPICard title="Ratio LTV:CAC" value={growthMetrics.ltvCacRatio} type="number" colorCondition="positive-green" icon={<Rocket />} privacyMode={isPrivacyMode} subtitle={growthMetrics.ltvCacRatio > 3 ? "Saudável (>3x)" : "Atenção"} />
@@ -558,6 +621,12 @@ const App: React.FC = () => {
                          
                          {/* Simulator & Calculator (Tools) */}
                          <div className="lg:col-span-4 flex flex-col gap-8">
+                            <ProLaboreCalculator 
+                                grossRevenue={rawView?.grossRevenue || 0}
+                                currentProfit={rawView?.netResult || 0}
+                                costs={currentView.costs}
+                                taxRate={settings.taxRate}
+                            />
                             <ScenarioSimulator 
                                 currentNetResult={rawView?.netResult || 0} 
                                 currentRevenue={rawView?.netRevenue || 0}
