@@ -7,6 +7,9 @@ interface KPICardProps {
   type?: 'currency' | 'percent' | 'number';
   colorCondition?: 'positive-green' | 'always-neutral' | 'cost-warning' | 'alert-low';
   icon?: React.ReactNode;
+  privacyMode?: boolean;
+  subtitle?: string;
+  onClick?: () => void;
 }
 
 const KPICard: React.FC<KPICardProps> = ({ 
@@ -14,7 +17,10 @@ const KPICard: React.FC<KPICardProps> = ({
   value, 
   type = 'currency', 
   colorCondition = 'positive-green',
-  icon
+  icon,
+  privacyMode = false,
+  subtitle,
+  onClick
 }) => {
   // Determine styles based on logic with smoother modern palette
   let theme = {
@@ -78,6 +84,8 @@ const KPICard: React.FC<KPICardProps> = ({
   }
 
   const formattedValue = () => {
+    if (privacyMode) return '••••';
+    
     switch (type) {
       case 'currency': return formatCurrency(value);
       case 'percent': return formatPercent(value);
@@ -88,6 +96,7 @@ const KPICard: React.FC<KPICardProps> = ({
 
   return (
     <div 
+      onClick={onClick}
       className={`
         relative group
         p-6 rounded-3xl
@@ -99,6 +108,7 @@ const KPICard: React.FC<KPICardProps> = ({
         transition-all duration-500 ease-out
         overflow-hidden
         flex flex-col justify-between h-40
+        ${onClick ? 'cursor-pointer' : ''}
       `}
     >
       {/* Background Decorative Glow Blob */}
@@ -131,6 +141,9 @@ const KPICard: React.FC<KPICardProps> = ({
         <div className={`text-4xl font-black ${theme.text} tracking-tight drop-shadow-sm group-hover:scale-105 origin-left transition-transform duration-500`}>
             {formattedValue()}
         </div>
+        {subtitle && (
+          <p className="text-[10px] text-slate-400 font-bold mt-2 uppercase tracking-wide opacity-80 group-hover:opacity-100 transition-opacity">{subtitle}</p>
+        )}
       </div>
       
       {/* Bottom Shine Reflection */}

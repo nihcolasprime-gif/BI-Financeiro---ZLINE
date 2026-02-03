@@ -40,7 +40,7 @@ const isValidData = (data: any[]) => {
 };
 
 // Custom Tooltip
-const CustomTooltip = ({ active, payload, label, formatter }: any) => {
+const CustomTooltip = ({ active, payload, label, formatter, privacyMode }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white/90 backdrop-blur-md p-4 rounded-xl border border-white/50 shadow-xl text-xs">
@@ -50,7 +50,9 @@ const CustomTooltip = ({ active, payload, label, formatter }: any) => {
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div>
             <span className="text-slate-500 capitalize">{entry.name}:</span>
             <span className="font-semibold text-slate-700">
-              {formatter ? formatter(entry.value, entry.name) : entry.value}
+              {privacyMode 
+                ? '••••' 
+                : (formatter ? formatter(entry.value, entry.name) : entry.value)}
             </span>
           </div>
         ))}
@@ -61,7 +63,7 @@ const CustomTooltip = ({ active, payload, label, formatter }: any) => {
 };
 
 // 1. Trend Chart (Revenue vs Cost vs Profit)
-export const TrendChart: React.FC<{ data: any[] }> = ({ data }) => {
+export const TrendChart: React.FC<{ data: any[], privacyMode?: boolean }> = ({ data, privacyMode }) => {
   if (!isValidData(data)) return <div className="h-full flex items-center justify-center text-slate-400">Sem dados</div>;
 
   return (
@@ -76,8 +78,8 @@ export const TrendChart: React.FC<{ data: any[] }> = ({ data }) => {
           </defs>
           <CartesianGrid stroke="#f1f5f9" vertical={false} strokeDasharray="3 3" />
           <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} />
-          <YAxis yAxisId="left" orientation="left" tickFormatter={(val) => `R$${val/1000}k`} axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} />
-          <Tooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
+          <YAxis yAxisId="left" orientation="left" tickFormatter={(val) => privacyMode ? '•••' : `R$${val/1000}k`} axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} />
+          <Tooltip content={<CustomTooltip privacyMode={privacyMode} formatter={(value: number) => formatCurrency(value)} />} />
           <Legend iconType="circle" />
           <Area yAxisId="left" type="monotone" dataKey="revenue" name="Receita" fill="url(#colorRev)" stroke={COLOR_REV} strokeWidth={2} />
           <Bar yAxisId="left" dataKey="cost" name="Custos" fill={COLOR_COST} radius={[4, 4, 0, 0]} barSize={20} />
@@ -89,7 +91,7 @@ export const TrendChart: React.FC<{ data: any[] }> = ({ data }) => {
 };
 
 // 2. Pareto Chart
-export const ParetoChart: React.FC<{ data: any[] }> = ({ data }) => {
+export const ParetoChart: React.FC<{ data: any[], privacyMode?: boolean }> = ({ data, privacyMode }) => {
   if (!isValidData(data)) return <div className="h-full flex items-center justify-center text-slate-400">Sem dados</div>;
 
   const sortedData = [...data].sort((a,b) => (b.Receita_Liquida_Apos_Imposto_BRL || 0) - (a.Receita_Liquida_Apos_Imposto_BRL || 0));
@@ -107,9 +109,9 @@ export const ParetoChart: React.FC<{ data: any[] }> = ({ data }) => {
         <ComposedChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
           <CartesianGrid stroke="#f1f5f9" vertical={false} />
           <XAxis dataKey="Cliente" axisLine={false} tickLine={false} fontSize={10} tick={{fill: '#64748b'}} interval={0} />
-          <YAxis yAxisId="left" orientation="left" tickFormatter={(val) => `R$${val/1000}k`} axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} />
+          <YAxis yAxisId="left" orientation="left" tickFormatter={(val) => privacyMode ? '•••' : `R$${val/1000}k`} axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b'}} />
           <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `${Math.round(val)}%`} domain={[0, 100]} axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#cbd5e1'}} />
-          <Tooltip content={<CustomTooltip formatter={(value: number, name: string) => name === 'Acumulado %' ? `${value.toFixed(1)}%` : formatCurrency(value)} />} />
+          <Tooltip content={<CustomTooltip privacyMode={privacyMode} formatter={(value: number, name: string) => name === 'Acumulado %' ? `${value.toFixed(1)}%` : formatCurrency(value)} />} />
           <Bar yAxisId="left" dataKey="Receita_Liquida_Apos_Imposto_BRL" name="Receita" fill={COLOR_REV} radius={[6, 6, 0, 0]} barSize={28}>
             {chartData.map((entry, index) => (
                <Cell key={`cell-${index}`} fill={`rgba(59, 130, 246, ${1 - (index * 0.1)})`} />
@@ -123,7 +125,7 @@ export const ParetoChart: React.FC<{ data: any[] }> = ({ data }) => {
 };
 
 // 3. Scatter Chart
-export const ScatterRevContent: React.FC<{ data: any[] }> = ({ data }) => {
+export const ScatterRevContent: React.FC<{ data: any[], privacyMode?: boolean }> = ({ data, privacyMode }) => {
   if (!isValidData(data)) return <div className="h-full flex items-center justify-center text-slate-400">Sem dados</div>;
 
   return (
@@ -132,8 +134,8 @@ export const ScatterRevContent: React.FC<{ data: any[] }> = ({ data }) => {
         <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
           <XAxis type="number" dataKey="Conteudos_Entregues" name="Conteúdos" unit=" un" tickLine={false} axisLine={false} tick={{fill: '#64748b'}} />
-          <YAxis type="number" dataKey="Receita_Liquida_Apos_Imposto_BRL" name="Receita" unit=" R$" tickLine={false} axisLine={false} tick={{fill: '#64748b'}} tickFormatter={(val) => `R$${val/1000}k`} />
-          <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomTooltip formatter={(value: any, name: string) => name === 'Receita' ? formatCurrency(value) : value} />} />
+          <YAxis type="number" dataKey="Receita_Liquida_Apos_Imposto_BRL" name="Receita" unit=" R$" tickLine={false} axisLine={false} tick={{fill: '#64748b'}} tickFormatter={(val) => privacyMode ? '•••' : `R$${val/1000}k`} />
+          <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomTooltip privacyMode={privacyMode} formatter={(value: any, name: string) => name === 'Receita' ? formatCurrency(value) : value} />} />
           <Scatter name="Clientes" data={data} fill={COLOR_REV}>
              {data.map((entry, index) => (
                <Cell key={`cell-${index}`} fill={(entry.profit || 0) < 0 ? COLOR_PROFIT_NEG : COLOR_PROFIT_POS} />
@@ -146,7 +148,7 @@ export const ScatterRevContent: React.FC<{ data: any[] }> = ({ data }) => {
 };
 
 // 4. Profit/Loss Chart
-export const ProfitLossChart: React.FC<{ clients: ExtendedClientData[] }> = ({ clients }) => {
+export const ProfitLossChart: React.FC<{ clients: ExtendedClientData[], privacyMode?: boolean }> = ({ clients, privacyMode }) => {
   if (!isValidData(clients)) return <div className="h-full flex items-center justify-center text-slate-400">Sem dados</div>;
 
   const sortedData = [...clients].sort((a, b) => (b.profit || 0) - (a.profit || 0));
@@ -160,7 +162,7 @@ export const ProfitLossChart: React.FC<{ clients: ExtendedClientData[] }> = ({ c
           <YAxis type="category" dataKey="Cliente" width={100} tick={{fontSize: 12, fill: '#475569', fontWeight: 600}} axisLine={false} tickLine={false} />
           <Tooltip 
             cursor={{fill: '#f1f5f9', opacity: 0.5}}
-            content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />}
+            content={<CustomTooltip privacyMode={privacyMode} formatter={(value: number) => formatCurrency(value)} />}
           />
           <Bar dataKey="profit" name="Lucro/Prejuízo" barSize={18} radius={[0, 99, 99, 0]}>
             {sortedData.map((entry, index) => (
@@ -174,7 +176,7 @@ export const ProfitLossChart: React.FC<{ clients: ExtendedClientData[] }> = ({ c
 };
 
 // 5. Efficiency Chart
-export const EfficiencyChart: React.FC<{ clients: ClientData[] }> = ({ clients }) => {
+export const EfficiencyChart: React.FC<{ clients: ClientData[], privacyMode?: boolean }> = ({ clients, privacyMode }) => {
   if (!isValidData(clients)) return <div className="h-full flex items-center justify-center text-slate-400">Sem dados</div>;
 
   return (
@@ -184,7 +186,7 @@ export const EfficiencyChart: React.FC<{ clients: ClientData[] }> = ({ clients }
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
           <XAxis dataKey="Cliente" tick={{fontSize: 11, fill: '#64748b'}} axisLine={false} tickLine={false} />
           <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip privacyMode={privacyMode} />} />
           <Legend />
           <Bar dataKey="Conteudos_Entregues" name="Entregues" stackId="a" fill={COLOR_REV} radius={[0,0,4,4]} />
           <Bar dataKey="Conteudos_Nao_Entregues" name="Não Entregues" stackId="a" fill="#e2e8f0" radius={[4,4,0,0]} />
@@ -198,9 +200,10 @@ export const EfficiencyChart: React.FC<{ clients: ClientData[] }> = ({ clients }
 interface CostsPieChartProps {
   costs: CostData[];
   onSliceClick?: (data: CostData) => void;
+  privacyMode?: boolean;
 }
 
-export const CostsPieChart: React.FC<CostsPieChartProps> = ({ costs, onSliceClick }) => {
+export const CostsPieChart: React.FC<CostsPieChartProps> = ({ costs, onSliceClick, privacyMode }) => {
   if (!isValidData(costs)) return <div className="h-full flex items-center justify-center text-slate-400">Sem dados</div>;
 
   const activeCosts = costs
@@ -232,7 +235,7 @@ export const CostsPieChart: React.FC<CostsPieChartProps> = ({ costs, onSliceClic
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
+          <Tooltip content={<CustomTooltip privacyMode={privacyMode} formatter={(value: number) => formatCurrency(value)} />} />
         </PieChart>
       </ResponsiveContainer>
     </div>
@@ -240,7 +243,7 @@ export const CostsPieChart: React.FC<CostsPieChartProps> = ({ costs, onSliceClic
 };
 
 // 7. Real vs Ideal Revenue Chart (Bar Comparison)
-export const RealVsIdealChart: React.FC<{ clients: any[] }> = ({ clients }) => {
+export const RealVsIdealChart: React.FC<{ clients: any[], privacyMode?: boolean }> = ({ clients, privacyMode }) => {
   if (!isValidData(clients)) return <div className="h-full flex items-center justify-center text-slate-400">Sem dados</div>;
 
   // Sort by Ideal Revenue for better visualization
@@ -252,12 +255,46 @@ export const RealVsIdealChart: React.FC<{ clients: any[] }> = ({ clients }) => {
         <BarChart data={sorted} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
           <XAxis dataKey="Cliente" tick={{fontSize: 11, fill: '#64748b'}} axisLine={false} tickLine={false} />
-          <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b'}} tickFormatter={(v) => `R$${v/1000}k`} />
-          <Tooltip content={<CustomTooltip formatter={(value: number) => formatCurrency(value)} />} />
+          <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b'}} tickFormatter={(v) => privacyMode ? '•••' : `R$${v/1000}k`} />
+          <Tooltip content={<CustomTooltip privacyMode={privacyMode} formatter={(value: number) => formatCurrency(value)} />} />
           <Legend />
           <Bar dataKey="Receita_Liquida_Apos_Imposto_BRL" name="Receita Real" fill={COLOR_REV} radius={[4,4,0,0]} barSize={12} />
           <Bar dataKey="idealRevenueBasedOnContract" name="Receita Ideal (20% Margem)" fill={COLOR_ACCENT} radius={[4,4,0,0]} barSize={12} />
         </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+// 8. Origin Pie Chart
+export const OriginPieChart: React.FC<{ data: any[], privacyMode?: boolean }> = ({ data, privacyMode }) => {
+  if (!isValidData(data)) return <div className="h-full flex items-center justify-center text-slate-400">Sem dados</div>;
+  
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
+
+  return (
+    <div className="w-full h-[350px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={60}
+            outerRadius={90}
+            paddingAngle={3}
+            dataKey="value"
+            nameKey="name"
+            stroke="none"
+            cursor="pointer"
+          >
+             {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip content={<CustomTooltip privacyMode={privacyMode} />} />
+          <Legend />
+        </PieChart>
       </ResponsiveContainer>
     </div>
   );
