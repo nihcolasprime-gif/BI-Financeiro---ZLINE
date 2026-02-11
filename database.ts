@@ -1,6 +1,5 @@
 import { supabase } from './lib/supabase';
 import { ClientContract, ClientMonthlyResult, CostData, GlobalSettings, MonthlyGrowthData } from './types';
-import { INITIAL_CONTRACTS, INITIAL_MONTHLY_RESULTS, ALL_COSTS, INITIAL_GROWTH_DATA } from './constants';
 
 // --- TRADUTORES: DO BANCO PARA O APP (READ) ---
 
@@ -96,13 +95,14 @@ export const fetchDashboardData = async () => {
     if (contracts.error) throw contracts.error;
 
     return {
-      contracts: contracts.data?.length ? contracts.data.map(mapContractFromDB) : INITIAL_CONTRACTS,
-      monthlyResults: results.data?.length ? results.data.map(mapResultFromDB) : INITIAL_MONTHLY_RESULTS,
-      costs: costs.data?.length ? costs.data.map(mapCostFromDB) : ALL_COSTS,
+      // CORREÇÃO AQUI: Se não houver dados, retorna array vazio [] em vez de dados falsos
+      contracts: contracts.data?.length ? contracts.data.map(mapContractFromDB) : [],
+      monthlyResults: results.data?.length ? results.data.map(mapResultFromDB) : [],
+      costs: costs.data?.length ? costs.data.map(mapCostFromDB) : [],
       settings: settings.data?.settings_json || null,
       growthData: growth.data?.length 
         ? growth.data.map((d: any) => ({ month: d.reference_month, adSpend: d.ad_spend, leads: d.leads })) 
-        : INITIAL_GROWTH_DATA
+        : []
     };
   } catch (error) {
     console.error("❌ Erro ao buscar dados:", error);
@@ -115,7 +115,6 @@ export const fetchDashboardData = async () => {
 // 1. Contratos
 export const upsertContract = async (contract: ClientContract) => {
   const payload = mapContractToDB(contract);
-  // Se não tiver ID (novo), remove o campo ID pro Supabase gerar
   if (!payload.id) delete payload.id; 
 
   const { data, error } = await supabase
@@ -173,13 +172,11 @@ export const deleteCost = async (id: string) => {
 
 // 4. Configurações
 export const saveSettings = async (settings: GlobalSettings) => {
-  // Busca se já existe ID 1 (ou cria estratégia de singleton)
-  // Como simplificamos, vamos buscar qualquer um, se não tiver cria.
   const { data: existing } = await supabase.from('global_settings').select('id').limit(1).single();
   
   const payload = {
     settings_json: settings,
-    id: existing?.id // Se existir, atualiza ele.
+    id: existing?.id
   };
 
   const { error } = await supabase.from('global_settings').upsert(payload);
