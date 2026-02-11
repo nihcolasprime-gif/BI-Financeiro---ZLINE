@@ -1,697 +1,531 @@
-
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { 
-  FileDown, Loader2, CheckCircle2, AlertCircle, AlertTriangle, Trash2, PlusCircle, Link2, Trash, Plus, Landmark, Calendar, RefreshCw, Sheet, XCircle, Ban, TrendingUp, Info, Lightbulb, Users
+  Settings, Users, FileText, DollarSign, Plus, Trash2, Save, X, 
+  AlertCircle, Check, ChevronDown, ChevronUp, Search, Target, Briefcase 
 } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
-import { ClientData, CostData, GlobalSettings, ClientContract, ClientMonthlyResult, MonthlyGrowthData } from '../types';
-import { formatPercent, sortMonths, escapeCsvValue, getMonthComparableValue, safeFloat } from '../utils';
+import { ClientData, ClientContract, ClientMonthlyResult, CostData, GlobalSettings, MonthlyGrowthData } from '../types';
 import { STANDARD_MONTHS } from '../constants';
+import { formatCurrency } from '../utils';
+
+// --- IMPORTANDO AS FUNÇÕES DO BANCO DE DADOS ---
+import { 
+  upsertContract, deleteContract, 
+  upsertMonthlyResult, 
+  upsertCost, deleteCost, 
+  saveSettings, saveGrowthData 
+} from '../database';
 
 interface ConfigurationsPanelProps {
   viewClients: ClientData[];
   contracts: ClientContract[];
-  onUpdateContracts: (contracts: ClientContract[]) => void;
   monthlyResults: ClientMonthlyResult[];
-  onUpdateResults: (results: ClientMonthlyResult[]) => void;
   allCosts: CostData[];
-  onUpdateCosts: (costs: CostData[]) => void;
   months: string[];
-  onUpdateMonths: (months: string[]) => void;
   settings: GlobalSettings;
-  onUpdateSettings: (settings: GlobalSettings) => void;
-  growthData?: MonthlyGrowthData[];
-  onUpdateGrowth?: (data: MonthlyGrowthData[]) => void;
+  growthData: MonthlyGrowthData[];
   selectedMonth: string;
-  privacyMode?: boolean;
-  churn?: number; // Recebendo churn calculado
+  onUpdateContracts: React.Dispatch<React.SetStateAction<ClientContract[]>>;
+  onUpdateResults: React.Dispatch<React.SetStateAction<ClientMonthlyResult[]>>;
+  onUpdateCosts: React.Dispatch<React.SetStateAction<CostData[]>>;
+  onUpdateSettings: React.Dispatch<React.SetStateAction<GlobalSettings>>;
+  onUpdateMonths: React.Dispatch<React.SetStateAction<string[]>>;
+  onUpdateGrowth: React.Dispatch<React.SetStateAction<MonthlyGrowthData[]>>;
+  privacyMode: boolean;
+  churn: number;
 }
 
-// --- PERFORMANCE COMPONENTS ---
-
-const CellInput = React.memo(({ value, onChange, isNumeric = false, className, placeholder, ...props }: any) => {
-  const [localValue, setLocalValue] = useState<string | number>(value);
-  const [error, setError] = useState(false);
-  
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
-  const handleBlur = () => {
-    let finalValue = localValue;
-
-    if (isNumeric) {
-      const parsed = safeFloat(localValue);
-      if (!isNaN(parsed)) {
-        finalValue = parsed;
-        setError(false);
-      } else {
-        setError(true);
-        finalValue = 0;
-      }
-    }
-
-    if (String(finalValue) !== String(value)) {
-      onChange(finalValue);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.currentTarget.blur();
-    }
-  };
-
-  return (
-    <input
-      type="text"
-      className={`${className} ${error ? 'ring-2 ring-rose-300 bg-rose-50' : ''}`}
-      value={localValue}
-      onChange={(e) => {
-        setLocalValue(e.target.value);
-        setError(false);
-      }}
-      onBlur={handleBlur}
-      onKeyDown={handleKeyDown}
-      placeholder={placeholder}
-      {...props}
-    />
-  );
-});
-
-const TabSubBtn = ({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) => (
-  <button 
-    onClick={onClick} 
-    className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
-      active 
-        ? 'bg-slate-900 text-white shadow-md' 
-        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-    }`}
-  >
-    {label}
-  </button>
-);
-
 export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
-  viewClients, contracts, monthlyResults, allCosts, months, settings, growthData = [], selectedMonth,
-  onUpdateContracts, onUpdateResults, onUpdateCosts, onUpdateSettings, onUpdateMonths, onUpdateGrowth,
-  privacyMode = false, churn = 0
+  contracts, monthlyResults, allCosts, months, settings, growthData, selectedMonth,
+  onUpdateContracts, onUpdateResults, onUpdateCosts, onUpdateSettings, onUpdateGrowth,
+  privacyMode
 }) => {
-  const [activeSection, setActiveSection] = useState<'clients' | 'costs' | 'global'>('clients');
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [newMonthName, setNewMonthName] = useState(STANDARD_MONTHS[0]);
-  const [newMonthYear, setNewMonthYear] = useState(new Date().getFullYear());
-  const reportRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<'geral' | 'contratos' | 'resultados' | 'custos' | 'growth'>('geral');
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const monthCosts = useMemo(() => allCosts.filter(c => c.Mes_Referencia === selectedMonth), [allCosts, selectedMonth]);
+  // Estados locais para formulários
+  const [editingContract, setEditingContract] = useState<Partial<ClientContract> | null>(null);
+  const [editingResult, setEditingResult] = useState<Partial<ClientMonthlyResult> | null>(null);
+  const [editingCost, setEditingCost] = useState<Partial<CostData> | null>(null);
+  
+  // Estado local para Settings e Growth
+  const [localSettings, setLocalSettings] = useState<GlobalSettings>(settings);
+  const [localAdSpend, setLocalAdSpend] = useState<number>(
+    growthData.find(g => g.month === selectedMonth)?.adSpend || 0
+  );
 
-  const currentGrowth = useMemo(() => 
-    growthData.find(g => g.month === selectedMonth) || { month: selectedMonth, adSpend: 0, leads: 0 },
-  [growthData, selectedMonth]);
-
-  // --- MARKET INTELLIGENCE BRAIN ---
-  const intelligence = useMemo(() => {
-    const grossRevenue = viewClients.reduce((s, c) => s + (Number(c.Receita_Mensal_BRL) || 0), 0);
-    const netRevenue = grossRevenue * (1 - settings.taxRate);
-    const activeCostsInMonth = monthCosts.filter(c => c.Ativo_no_Mes);
-    const totalCost = activeCostsInMonth.reduce((s, c) => s + (Number(c.Valor_Mensal_BRL) || 0), 0);
-    const margin = netRevenue !== 0 ? (netRevenue - totalCost) / netRevenue : 0;
-    
-    // Benchmarks (Defaults if missing)
-    const bm = settings.benchmarks || { maxChurn: 0.05, minMargin: 0.20, minLtvCac: 3.0, safeCapacityLimit: 0.85 };
-
-    const insights: { type: 'danger' | 'warning' | 'opportunity', title: string, message: string, icon: any }[] = [];
-    
-    // 1. Margin Analysis
-    if (margin < 0) {
-       insights.push({ 
-           type: 'danger', 
-           title: 'Prejuízo Operacional',
-           message: 'Sua operação está queimando caixa. Revise custos fixos imediatamente ou aumente o ticket médio.',
-           icon: <AlertCircle size={16} /> 
-       });
-    } else if (margin < bm.minMargin) {
-       insights.push({ 
-           type: 'warning', 
-           title: 'Margem Abaixo do Mercado',
-           message: `Sua margem (${formatPercent(margin)}) está inferior à base configurada (${formatPercent(bm.minMargin)}). Considere reajustar contratos antigos.`,
-           icon: <TrendingUp size={16} /> 
-       });
-    } else if (margin > (bm.minMargin + 0.15)) {
-        insights.push({
-            type: 'opportunity',
-            title: 'Alta Eficiência Financeira',
-            message: 'Sua margem está excelente. É um bom momento para reinvestir em crescimento (Ads) sem comprometer o caixa.',
-            icon: <Lightbulb size={16} />
-        });
-    }
-
-    // 2. Churn Analysis
-    if (churn > bm.maxChurn) {
-        insights.push({
-            type: 'danger',
-            title: 'Risco de Churn Elevado',
-            message: `Sua taxa de perda (${formatPercent(churn)}) supera o limite seguro (${formatPercent(bm.maxChurn)}). Foque em Customer Success e retenção antes de vender mais.`,
-            icon: <Users size={16} />
-        });
-    }
-
-    // 3. Operational Consistency Check
-    const contractsWithResults = new Set(viewClients.map(c => c.contractId));
-    const missingContracts = contracts.filter(c => c.Status_Contrato === 'Ativo' && !contractsWithResults.has(c.id)).length;
-    if (missingContracts > 0) {
-      insights.push({ 
-          type: 'warning', 
-          title: 'Inconsistência de Dados',
-          message: `${missingContracts} contratos ativos não foram lançados neste mês. Sua receita pode estar subestimada.`,
-          icon: <RefreshCw size={16} /> 
-      });
-    }
-
-    const isHealthy = insights.filter(i => i.type === 'danger').length === 0;
-
-    return { isHealthy, insights };
-  }, [viewClients, monthCosts, settings, contracts, churn]);
-
-  const handleUpdateContract = useCallback((contractId: string, field: keyof ClientContract, value: any) => {
-    onUpdateContracts(contracts.map(c => c.id === contractId ? { ...c, [field]: value } : c));
-  }, [contracts, onUpdateContracts]);
-
-  const handleUpdateMonthly = useCallback((monthlyId: string, field: keyof ClientMonthlyResult, value: any) => {
-    onUpdateResults(monthlyResults.map(r => r.id === monthlyId ? { ...r, [field]: value } : r));
-  }, [monthlyResults, onUpdateResults]);
-
-  const handleUpdateGrowth = useCallback((field: keyof MonthlyGrowthData, value: number) => {
-    if (!onUpdateGrowth) return;
-    
-    const existingIndex = growthData.findIndex(g => g.month === selectedMonth);
-    let newData = [...growthData];
-    
-    if (existingIndex >= 0) {
-        newData[existingIndex] = { ...newData[existingIndex], [field]: value };
-    } else {
-        newData.push({ month: selectedMonth, adSpend: 0, leads: 0, [field]: value });
-    }
-    
-    onUpdateGrowth(newData);
-  }, [growthData, selectedMonth, onUpdateGrowth]);
-
-  const handleSmartUpdate = useCallback((clientView: ClientData, field: keyof ClientData, val: any) => {
-    if (['Cliente', 'Data_Inicio', 'Data_Renovacao', 'Dia_Pagamento', 'Descricao_Servico', 'Valor_Sugerido_Renovacao', 'Origem'].includes(field)) {
-       handleUpdateContract(clientView.contractId, field as keyof ClientContract, val);
-    } 
-    else if (['Receita_Mensal_BRL', 'Conteudos_Contratados', 'Conteudos_Entregues', 'Status_Cliente'].includes(field)) {
-       const targetField = field === 'Status_Cliente' ? 'Status_Mensal' : field as keyof ClientMonthlyResult;
-       handleUpdateMonthly(clientView.id, targetField, val);
-    }
-  }, [handleUpdateContract, handleUpdateMonthly]);
-
-  const handleUpdateCost = (id: string, field: keyof CostData, rawValue: any) => {
-    onUpdateCosts(allCosts.map(c => c.id === id ? { ...c, [field]: rawValue } : c));
+  const showFeedback = (type: 'success' | 'error', msg: string) => {
+    setFeedback({ type, msg });
+    setTimeout(() => setFeedback(null), 3000);
   };
 
-  const handleAddClient = () => {
-    const newContractId = `c-${Date.now()}`;
-    const newContract: ClientContract = {
-      id: newContractId,
-      Cliente: 'Novo Cliente',
-      Status_Contrato: 'Ativo',
-      Data_Inicio: new Date().toISOString().split('T')[0],
-      Data_Renovacao: '',
-      Dia_Pagamento: 5,
-      Descricao_Servico: '',
-      Valor_Sugerido_Renovacao: 0,
-      Origem: 'Indicação'
-    };
-    const newMonthly: ClientMonthlyResult = {
-      id: `m-${Date.now()}`,
-      contractId: newContractId,
-      Mes_Referencia: selectedMonth,
-      Status_Mensal: 'Ativo',
-      Receita_Mensal_BRL: 0,
-      Conteudos_Contratados: 0,
-      Conteudos_Entregues: 0,
-      Conteudos_Nao_Entregues: 0
-    };
-    onUpdateContracts([...contracts, newContract]);
-    onUpdateResults([...monthlyResults, newMonthly]);
-  };
-
-  const handleSyncContracts = () => {
-    const existingContractIds = new Set(viewClients.map(c => c.contractId));
-    const missingContracts = contracts.filter(c => c.Status_Contrato === 'Ativo' && !existingContractIds.has(c.id));
-
-    if (missingContracts.length === 0) return alert("Todos os contratos ativos já possuem lançamento neste mês.");
-
-    if (window.confirm(`Detectados ${missingContracts.length} contratos ativos sem lançamento em ${selectedMonth}. Deseja inicializá-los agora?`)) {
-      const resultsByContract = new Map<string, ClientMonthlyResult[]>();
-      monthlyResults.forEach(r => {
-        if (!resultsByContract.has(r.contractId)) {
-          resultsByContract.set(r.contractId, []);
-        }
-        resultsByContract.get(r.contractId)?.push(r);
-      });
-
-      const newResults: ClientMonthlyResult[] = [];
-      
-      missingContracts.forEach(contract => {
-        const contractHistory = resultsByContract.get(contract.id)?.filter(r => r.Mes_Referencia !== selectedMonth) || [];
-        const sortedHistory = [...contractHistory].sort((a, b) => getMonthComparableValue(a.Mes_Referencia) - getMonthComparableValue(b.Mes_Referencia));
-        const lastResult = sortedHistory.length > 0 ? sortedHistory[sortedHistory.length - 1] : null;
-
-        newResults.push({
-          id: `m-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          contractId: contract.id,
-          Mes_Referencia: selectedMonth,
-          Status_Mensal: 'Ativo',
-          Receita_Mensal_BRL: lastResult ? lastResult.Receita_Mensal_BRL : (contract.Valor_Sugerido_Renovacao || 0),
-          Conteudos_Contratados: lastResult ? lastResult.Conteudos_Contratados : 0,
-          Conteudos_Entregues: 0,
-          Conteudos_Nao_Entregues: 0
-        });
-      });
-
-      onUpdateResults([...monthlyResults, ...newResults]);
-    }
-  };
-
-  const handleAddCost = () => {
-    const newCost: CostData = {
-      id: `cost-${Date.now()}`,
-      Tipo_Custo: 'Nova Despesa',
-      Mes_Referencia: selectedMonth,
-      Valor_Mensal_BRL: 0,
-      Ativo_no_Mes: true,
-      Categoria: 'Operacional',
-      Tipo: 'Variável'
-    };
-    onUpdateCosts([...allCosts, newCost]);
-  };
-
-  const handleRemoveFromMonth = (monthlyId: string) => {
-    if (window.confirm("CONFIRMAÇÃO: Remover este lançamento do mês atual?\n\nO contrato original do cliente permanecerá salvo, apenas os dados deste mês serão removidos.")) {
-      onUpdateResults(monthlyResults.filter(r => r.id !== monthlyId));
-    }
-  };
-
-  const handleDeleteContractMaster = (contractId: string, name: string) => {
-    if (window.confirm(`PERIGO - EXCLUSÃO DE CLIENTE\n\nVocê está prestes a excluir permanentemente o cliente "${name}".\n\nIsso apagará:\n1. O contrato principal.\n2. TODO o histórico financeiro em TODOS os meses registrados.\n\nEsta ação é irreversível. Deseja continuar?`)) {
-      onUpdateContracts(contracts.filter(c => c.id !== contractId));
-      onUpdateResults(monthlyResults.filter(r => r.contractId !== contractId));
-    }
-  };
-
-  const handleDeleteCost = (id: string) => {
-    if (window.confirm("Excluir esta despesa permanentemente?")) {
-      onUpdateCosts(allCosts.filter(c => c.id !== id));
-    }
-  };
-
-  const handleAddMonth = () => {
-    if (newMonthYear < 2020 || newMonthYear > 2035) {
-       alert("Por favor, insira um ano válido entre 2020 e 2035.");
-       return;
-    }
-
-    const monthKey = `${newMonthName}/${newMonthYear}`;
-    if (months.includes(monthKey)) {
-      alert("Este mês já existe na lista.");
-      return;
-    }
-    onUpdateMonths([...months, monthKey]);
-  };
-
-  const handleDeleteMonth = (monthToDelete: string) => {
-    if (months.length <= 1) return alert("É necessário ter pelo menos um mês no sistema.");
-    
-    if (confirm(`PERIGO: Excluir o mês "${monthToDelete}"?\n\nTodos os lançamentos de receita e custos deste mês serão apagados permanentemente.`)) {
-      onUpdateMonths(months.filter(m => m !== monthToDelete));
-      onUpdateResults(monthlyResults.filter(r => r.Mes_Referencia !== monthToDelete));
-      onUpdateCosts(allCosts.filter(c => c.Mes_Referencia !== monthToDelete));
-    }
-  };
-
-  const generatePDFReport = async () => {
-    if (!reportRef.current) return;
-    setIsGeneratingPDF(true);
+  // --- HANDLERS CONTRATOS ---
+  
+  const handleSaveContract = async () => {
+    if (!editingContract?.Cliente) return;
+    setIsSubmitting(true);
     try {
-      const canvas = await html2canvas(reportRef.current, { scale: 2, backgroundColor: '#f8fafc' });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = 210;
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      // 1. Salva no Supabase
+      const saved = await upsertContract(editingContract as ClientContract);
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Relatorio_Auditoria_${selectedMonth.replace(/\//g, '-')}.pdf`);
+      // 2. Atualiza Estado Local (UI)
+      onUpdateContracts(prev => {
+        const exists = prev.find(c => c.id === saved.id);
+        if (exists) return prev.map(c => c.id === saved.id ? saved : c);
+        return [...prev, saved];
+      });
+
+      setEditingContract(null);
+      showFeedback('success', 'Contrato salvo com sucesso!');
     } catch (error) {
-      console.error("Erro ao gerar PDF", error);
-      alert("Falha na geração do PDF.");
+      console.error(error);
+      showFeedback('error', 'Erro ao salvar contrato.');
     } finally {
-      setIsGeneratingPDF(false);
+      setIsSubmitting(false);
     }
   };
 
-  const exportToCSV = () => {
-    const headers = ["Mes_Referencia", "Cliente", "Origem", "Servico", "Status", "Receita_BRL", "Custo_Alocado_BRL", "Lucro_BRL", "Margem_%", "Entregas_Realizadas", "Entregas_Contratadas"];
-    const rows = viewClients.map(c => [
-      escapeCsvValue(c.Mes_Referencia),
-      escapeCsvValue(c.Cliente),
-      escapeCsvValue(c.Origem || 'Indicação'),
-      escapeCsvValue(c.Descricao_Servico),
-      escapeCsvValue(c.Status_Cliente),
-      c.Receita_Mensal_BRL.toFixed(2),
-      ((c.netRevenue || 0) - (c.profit || 0)).toFixed(2),
-      (c.profit || 0).toFixed(2),
-      ((c.margin || 0) * 100).toFixed(2),
-      c.Conteudos_Entregues,
-      c.Conteudos_Contratados
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `zline_export_${selectedMonth.replace(/\//g, '-')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDeleteContract = async (id: string) => {
+    if (!confirm('Tem certeza? Isso apagará o histórico deste cliente.')) return;
+    setIsSubmitting(true);
+    try {
+      await deleteContract(id);
+      onUpdateContracts(prev => prev.filter(c => c.id !== id));
+      showFeedback('success', 'Contrato removido.');
+    } catch (error) {
+      showFeedback('error', 'Erro ao remover contrato.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const missingContractsCount = contracts.filter(c => c.Status_Contrato === 'Ativo' && !viewClients.find(v => v.contractId === c.id)).length;
-  const displayMonths = useMemo(() => sortMonths(months), [months]);
+  // --- HANDLERS RESULTADOS ---
+
+  const handleSaveResult = async () => {
+    if (!editingResult?.contractId || !editingResult.Mes_Referencia) return;
+    setIsSubmitting(true);
+    try {
+      const saved = await upsertMonthlyResult(editingResult as ClientMonthlyResult);
+      
+      onUpdateResults(prev => {
+        // Remove anterior se existir (para evitar duplicata visual temporária)
+        const clean = prev.filter(r => r.id !== saved.id);
+        return [...clean, saved];
+      });
+
+      setEditingResult(null);
+      showFeedback('success', 'Resultado lançado!');
+    } catch (error) {
+      showFeedback('error', 'Erro ao lançar resultado.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // --- HANDLERS CUSTOS ---
+
+  const handleSaveCost = async () => {
+    if (!editingCost?.Tipo_Custo || !editingCost.Valor_Mensal_BRL) return;
+    setIsSubmitting(true);
+    try {
+      const saved = await upsertCost(editingCost as CostData);
+      
+      onUpdateCosts(prev => {
+        const exists = prev.find(c => c.id === saved.id);
+        if (exists) return prev.map(c => c.id === saved.id ? saved : c);
+        return [...prev, saved];
+      });
+
+      setEditingCost(null);
+      showFeedback('success', 'Custo salvo!');
+    } catch (error) {
+      showFeedback('error', 'Erro ao salvar custo.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteCost = async (id: string) => {
+    if (!confirm('Remover este custo?')) return;
+    setIsSubmitting(true);
+    try {
+      await deleteCost(id);
+      onUpdateCosts(prev => prev.filter(c => c.id !== id));
+      showFeedback('success', 'Custo removido.');
+    } catch (error) {
+      showFeedback('error', 'Erro ao remover custo.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // --- HANDLERS SETTINGS & GROWTH ---
+
+  const handleSaveSettings = async () => {
+    setIsSubmitting(true);
+    try {
+      await saveSettings(localSettings);
+      await saveGrowthData(selectedMonth, localAdSpend);
+      
+      onUpdateSettings(localSettings);
+      onUpdateGrowth(prev => {
+         const others = prev.filter(g => g.month !== selectedMonth);
+         return [...others, { month: selectedMonth, adSpend: localAdSpend }];
+      });
+
+      showFeedback('success', 'Configurações globais salvas.');
+    } catch (error) {
+      showFeedback('error', 'Erro ao salvar configurações.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // --- RENDERIZADORES ---
 
   return (
-    <div className="space-y-6" ref={reportRef}>
-      {/* Header Panel */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-2 glass-panel p-6 rounded-[32px] flex flex-col md:flex-row items-center justify-between border-none shadow-lg gap-4">
-          <div className="flex gap-2 bg-slate-100/50 p-1.5 rounded-2xl overflow-x-auto max-w-full">
-            <TabSubBtn active={activeSection === 'clients'} label="Gestão de Contratos" onClick={() => setActiveSection('clients')} />
-            <TabSubBtn active={activeSection === 'costs'} label="Gestão de Custos" onClick={() => setActiveSection('costs')} />
-            <TabSubBtn active={activeSection === 'global'} label="Sistema" onClick={() => setActiveSection('global')} />
-          </div>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={exportToCSV}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl text-xs font-black hover:bg-emerald-200 transition-all"
-              title="Baixar CSV para Excel/Sheets"
-            >
-              <Sheet size={14} /> CSV
-            </button>
-            <button 
-              onClick={generatePDFReport} 
-              disabled={isGeneratingPDF}
-              className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 disabled:opacity-50"
-            >
-              {isGeneratingPDF ? <Loader2 className="animate-spin" size={14}/> : <FileDown size={14} />} 
-              {isGeneratingPDF ? 'Gerando...' : 'PDF'}
-            </button>
-          </div>
+    <div className="glass-panel p-6 rounded-[40px] shadow-xl min-h-[600px] relative overflow-hidden">
+      {/* Feedback Toast */}
+      {feedback && (
+        <div className={`absolute top-4 right-4 px-4 py-2 rounded-xl text-xs font-bold shadow-lg animate-fade-in z-50 flex items-center gap-2 ${feedback.type === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+          {feedback.type === 'success' ? <Check size={14}/> : <AlertCircle size={14}/>}
+          {feedback.msg}
         </div>
-        <div className={`glass-panel p-6 rounded-[32px] border-none flex items-center gap-4 shadow-lg ${intelligence.isHealthy ? 'bg-emerald-50/50' : 'bg-white/80'}`}>
-           <div className={`p-3 rounded-2xl ${intelligence.isHealthy ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-             {intelligence.isHealthy ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
-           </div>
-           <div>
-             <p className="text-[10px] font-black opacity-60 uppercase">Inteligência de Mercado</p>
-             <p className={`text-sm font-black ${intelligence.isHealthy ? 'text-emerald-700' : 'text-slate-700'}`}>
-               {intelligence.insights.length > 0 ? `${intelligence.insights.length} Insights` : 'Operação Estável'}
-             </p>
-           </div>
-        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-4 mb-6 border-b border-slate-100 no-scrollbar">
+        {[
+            { id: 'geral', icon: Settings, label: 'Ajustes Globais' },
+            { id: 'contratos', icon: Users, label: 'Contratos (Clientes)' },
+            { id: 'resultados', icon: FileText, label: 'Lançamento Mensal' },
+            { id: 'custos', icon: DollarSign, label: 'Custos & Despesas' }
+        ].map(tab => (
+            <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+            >
+                <tab.icon size={14} /> {tab.label}
+            </button>
+        ))}
       </div>
 
-      {/* INTELLIGENCE ALERTS SECTION */}
-      {intelligence.insights.length > 0 && (
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {intelligence.insights.map((insight, idx) => {
-               let bgClass = 'bg-slate-50 border-slate-100';
-               let textClass = 'text-slate-700';
-               let iconClass = 'text-slate-500';
-
-               if (insight.type === 'danger') {
-                   bgClass = 'bg-rose-50 border-rose-100';
-                   textClass = 'text-rose-800';
-                   iconClass = 'text-rose-500';
-               } else if (insight.type === 'warning') {
-                   bgClass = 'bg-amber-50 border-amber-100';
-                   textClass = 'text-amber-800';
-                   iconClass = 'text-amber-500';
-               } else if (insight.type === 'opportunity') {
-                   bgClass = 'bg-indigo-50 border-indigo-100';
-                   textClass = 'text-indigo-800';
-                   iconClass = 'text-indigo-500';
-               }
-
-               return (
-                   <div key={idx} className={`${bgClass} border p-4 rounded-2xl flex items-start gap-3 shadow-sm`}>
-                       <div className={`mt-0.5 ${iconClass}`}>{insight.icon}</div>
-                       <div>
-                           <p className={`text-xs font-black uppercase mb-1 ${textClass}`}>{insight.title}</p>
-                           <p className="text-xs font-medium opacity-80 leading-relaxed">{insight.message}</p>
-                       </div>
-                   </div>
-               )
-            })}
-         </div>
-      )}
-
-      {activeSection === 'clients' && (
-        <div className="glass-panel rounded-[32px] overflow-hidden shadow-2xl border-none">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 border-b border-slate-100">
-                <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  <th className="px-6 py-5">Contrato (Master)</th>
-                  <th className="px-4 py-5">Origem / Vigência</th>
-                  <th className="px-4 py-5 text-center">Volume (Mensal)</th>
-                  <th className="px-4 py-5 text-center">Pgto (Master)</th>
-                  <th className="px-6 py-5 text-right">Financeiro (Mensal)</th>
-                  <th className="px-6 py-5 text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {viewClients.map(c => (
-                  <tr key={c.id} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-between gap-2">
-                        <CellInput value={c.Cliente} onChange={(val: string) => handleSmartUpdate(c, 'Cliente', val)} className="font-bold outline-none bg-transparent w-full focus:text-indigo-600 block mb-1" />
-                        <button 
-                          onClick={() => handleDeleteContractMaster(c.contractId, c.Cliente)} 
-                          title="Excluir Cliente e Histórico (Irreversível)" 
-                          className="text-slate-200 hover:text-rose-600 transition-colors opacity-0 group-hover:opacity-100 p-1"
-                        >
-                           <XCircle size={16} />
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-1 group/desc">
-                        <Link2 size={10} className="text-slate-300 group-hover/desc:text-indigo-400"/>
-                        <CellInput value={c.Descricao_Servico || ''} placeholder="Serviço..." onChange={(val: string) => handleSmartUpdate(c, 'Descricao_Servico', val)} className="text-[10px] font-bold text-slate-400 outline-none bg-transparent w-full focus:text-indigo-400 uppercase tracking-tighter" />
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 min-w-[160px]">
-                      <select 
-                        value={c.Origem || 'Indicação'}
-                        onChange={e => handleSmartUpdate(c, 'Origem', e.target.value)}
-                        className="text-[9px] font-black uppercase rounded-lg px-2 py-1 mb-2 outline-none bg-slate-100 text-slate-500 w-full"
-                      >
-                         <option value="Indicação">Indicação</option>
-                         <option value="Ads">Ads (Pago)</option>
-                         <option value="Outbound">Outbound</option>
-                         <option value="Orgânico">Orgânico</option>
-                         <option value="Parceria">Parceria</option>
-                         <option value="Outros">Outros</option>
-                      </select>
-                      <div className="flex flex-col gap-1">
-                         <CellInput type="date" value={c.Data_Inicio || ''} onChange={(val: string) => handleSmartUpdate(c, 'Data_Inicio', val)} className="bg-transparent text-[9px] font-bold text-slate-500 outline-none" />
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <CellInput isNumeric type="text" value={c.Conteudos_Entregues} onChange={(val: number) => handleSmartUpdate(c, 'Conteudos_Entregues', val)} className="w-10 text-center bg-slate-100 rounded-lg p-1 font-bold text-xs outline-none" />
-                        <span className="text-slate-300 font-bold">/</span>
-                        <CellInput isNumeric type="text" value={c.Conteudos_Contratados} onChange={(val: number) => handleSmartUpdate(c, 'Conteudos_Contratados', val)} className="w-10 text-center bg-slate-100 rounded-lg p-1 font-bold text-xs outline-none" />
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                       <CellInput isNumeric type="text" value={c.Dia_Pagamento || ''} onChange={(val: number) => handleSmartUpdate(c, 'Dia_Pagamento', val)} className="w-10 text-center bg-indigo-50 text-indigo-600 rounded-lg p-1 font-black text-xs outline-none" />
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                       <CellInput isNumeric type="text" value={c.Receita_Mensal_BRL} onChange={(val: number) => handleSmartUpdate(c, 'Receita_Mensal_BRL', val)} className="w-24 text-right font-mono font-black outline-none bg-transparent focus:ring-1 focus:ring-indigo-100 rounded px-1" />
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <button 
-                        onClick={() => handleRemoveFromMonth(c.id)} 
-                        className="p-2 text-slate-300 hover:text-amber-500 hover:bg-amber-50 rounded-xl transition-all"
-                        title="Remover cliente deste mês (Mantém contrato ativo)"
-                      >
-                        <Trash2 size={18}/>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          
-          <div className="flex flex-col md:flex-row border-t border-slate-100">
-            <button onClick={handleAddClient} className="flex-1 p-4 text-indigo-600 font-bold text-xs hover:bg-indigo-50 flex justify-center gap-2 items-center transition-colors">
-              <PlusCircle size={16}/> Novo Contrato
-            </button>
-            {missingContractsCount > 0 && (
-              <button onClick={handleSyncContracts} className="flex-1 p-4 text-emerald-600 font-bold text-xs hover:bg-emerald-50 flex justify-center gap-2 items-center border-l border-slate-100 transition-colors">
-                 <RefreshCw size={16}/> Sincronizar {missingContractsCount} Contratos Pendentes
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeSection === 'costs' && (
-        <div className="glass-panel rounded-[32px] overflow-hidden shadow-2xl border-none">
-          <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-100">
-               <tr className="text-[10px] font-black text-slate-400 uppercase">
-                 <th className="px-6 py-4">Despesa</th>
-                 <th className="px-4 py-4">Categoria</th>
-                 <th className="px-4 py-4 text-center">Status</th>
-                 <th className="px-6 py-4 text-right">Valor</th>
-                 <th className="px-4 py-4 text-center">Ações</th>
-               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {monthCosts.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50/50">
-                  <td className="px-6 py-4"><CellInput type="text" value={c.Tipo_Custo} onChange={(val: string) => handleUpdateCost(c.id, 'Tipo_Custo', val)} className="font-bold outline-none bg-transparent w-full"/></td>
-                  <td className="px-4 py-4">
-                     <select value={c.Categoria} onChange={e => handleUpdateCost(c.id, 'Categoria', e.target.value)} className="text-xs bg-slate-100 rounded px-2 py-1 outline-none font-bold text-slate-600">
-                        <option value="Operacional">Operacional</option>
-                        <option value="Administrativo">Administrativo</option>
-                        <option value="Impostos">Impostos</option>
-                        <option value="Outros">Outros</option>
-                     </select>
-                  </td>
-                  <td className="px-4 py-4 text-center">
-                     <button onClick={() => handleUpdateCost(c.id, 'Ativo_no_Mes', !c.Ativo_no_Mes)} className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${c.Ativo_no_Mes ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>{c.Ativo_no_Mes ? 'On' : 'Off'}</button>
-                  </td>
-                  <td className="px-6 py-4 text-right"><CellInput isNumeric type="text" value={c.Valor_Mensal_BRL} onChange={(val: number) => handleUpdateCost(c.id, 'Valor_Mensal_BRL', val)} className="w-24 text-right font-mono font-black outline-none bg-transparent"/></td>
-                  <td className="px-4 py-4 text-center"><button onClick={() => handleDeleteCost(c.id)} className="text-slate-300 hover:text-rose-500"><Trash2 size={16}/></button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <button onClick={handleAddCost} className="w-full p-4 text-indigo-600 font-bold text-xs hover:bg-indigo-50 flex justify-center gap-2 items-center"><PlusCircle size={16}/> Nova Despesa</button>
-        </div>
-      )}
-
-      {activeSection === 'global' && (
-        <div className="glass-panel p-8 rounded-[40px]">
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                <h3 className="text-sm font-black mb-6 flex items-center gap-2 text-slate-700">
-                  <Landmark size={16}/> Configurações de Negócio
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-2">Método de Alocação</label>
-                    <select value={settings.allocationMethod} onChange={e => onUpdateSettings({...settings, allocationMethod: e.target.value as any})} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none">
-                        <option value="perDelivered">Por Entrega (Realizado)</option>
-                        <option value="perContracted">Por Contrato (Previsto)</option>
-                        <option value="equalShare">Divisão Igualitária</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 block mb-2">Imposto (%)</label>
-                    <input type="number" step="0.01" value={settings.taxRate} onChange={e => onUpdateSettings({...settings, taxRate: parseFloat(e.target.value)})} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
-                  </div>
-
-                  {/* BENCHMARKS INPUTS - ATUALIZANDO ALERTAS E RISCOS */}
-                  <div className="pt-4 border-t border-slate-100">
-                      <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Métricas de Mercado (Benchmarks)</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="text-xs font-bold text-slate-500 block mb-2">Máximo Churn (%)</label>
-                            <input 
-                                type="number" 
-                                step="0.01" 
-                                value={(settings.benchmarks?.maxChurn || 0.05)} 
-                                onChange={e => onUpdateSettings({...settings, benchmarks: { ...settings.benchmarks, maxChurn: parseFloat(e.target.value) }})} 
-                                className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" 
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-bold text-slate-500 block mb-2">Margem Mínima (%)</label>
-                            <input 
-                                type="number" 
-                                step="0.01" 
-                                value={(settings.benchmarks?.minMargin || 0.20)} 
-                                onChange={e => onUpdateSettings({...settings, benchmarks: { ...settings.benchmarks, minMargin: parseFloat(e.target.value) }})} 
-                                className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" 
-                            />
-                          </div>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-2 leading-tight">
-                          Esses valores alimentam o <strong>Painel de Inteligência</strong>. Altere conforme a realidade do seu nicho para receber alertas mais precisos.
-                      </p>
-                  </div>
-                  
-                  <div className="pt-4 border-t border-slate-100 mt-4">
-                    <label className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-2">
-                      <TrendingUp size={14} className="text-indigo-500"/> 
-                      Investimento em Marketing (Mês Atual)
-                    </label>
-                    <div className="flex gap-2">
-                        <input 
-                            type="number" 
-                            placeholder="0,00"
-                            value={currentGrowth.adSpend} 
-                            onChange={e => handleUpdateGrowth('adSpend', parseFloat(e.target.value))} 
-                            className="w-full p-3 rounded-xl bg-indigo-50 border border-indigo-100 font-bold text-sm outline-none text-indigo-700 focus:ring-2 focus:ring-indigo-500/20" 
-                        />
+      <div className="animate-fade-in">
+        
+        {/* TAB: GERAL */}
+        {activeTab === 'geral' && (
+            <div className="max-w-2xl mx-auto space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Target size={14}/> Metas & Impostos</h4>
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Imposto Médio (%)</label>
+                                <input type="number" step="0.1" value={localSettings.taxRate * 100} onChange={e => setLocalSettings({...localSettings, taxRate: parseFloat(e.target.value)/100})} className="w-full p-2 bg-white rounded-xl text-sm font-bold border border-slate-200 outline-none focus:border-indigo-500 transition-colors" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Margem Alvo (%)</label>
+                                <input type="number" step="1" value={localSettings.targetMargin * 100} onChange={e => setLocalSettings({...localSettings, targetMargin: parseFloat(e.target.value)/100})} className="w-full p-2 bg-white rounded-xl text-sm font-bold border border-slate-200 outline-none focus:border-indigo-500 transition-colors" />
+                            </div>
+                        </div>
                     </div>
-                    
-                    <div className="flex gap-2 mt-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                       <Info size={16} className="text-indigo-400 shrink-0 mt-0.5" />
-                       <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-                         <strong className="text-slate-700">O que incluir aqui?</strong><br/>
-                         Soma de todo valor investido para aquisição de clientes neste mês. <br/>
-                         Ex: Google/Meta Ads, Ferramentas de CRM/Sales, Comissões de Venda.
-                         <br/><br/>
-                         Isso é usado para calcular seu <strong className="text-indigo-600">CAC</strong> e <strong className="text-emerald-600">ROI</strong>.
-                       </p>
+                    <div className="space-y-4">
+                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Briefcase size={14}/> Capacidade & Growth</h4>
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Capacidade Máxima (Vídeos/Mês)</label>
+                                <input type="number" value={localSettings.maxProductionCapacity} onChange={e => setLocalSettings({...localSettings, maxProductionCapacity: parseInt(e.target.value)})} className="w-full p-2 bg-white rounded-xl text-sm font-bold border border-slate-200 outline-none focus:border-indigo-500 transition-colors" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-indigo-500 uppercase">Investimento Ads ({selectedMonth})</label>
+                                <input type="number" value={localAdSpend} onChange={e => setLocalAdSpend(parseFloat(e.target.value))} className="w-full p-2 bg-indigo-50 rounded-xl text-sm font-bold border border-indigo-100 outline-none focus:border-indigo-500 transition-colors text-indigo-700" />
+                            </div>
+                        </div>
                     </div>
-                  </div>
                 </div>
-              </div>
+                <button onClick={handleSaveSettings} disabled={isSubmitting} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20 active:scale-95 disabled:opacity-50">
+                    {isSubmitting ? 'Salvando...' : 'Salvar Alterações Globais'}
+                </button>
+            </div>
+        )}
 
-              <div>
-                <h3 className="text-sm font-black mb-6 flex items-center gap-2 text-slate-700">
-                  <Calendar size={16}/> Gestão de Ciclos (Meses)
-                </h3>
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-4">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Adicionar Novo Mês</p>
-                   <div className="flex gap-2">
-                      <select value={newMonthName} onChange={e => setNewMonthName(e.target.value)} className="p-3 rounded-xl text-xs font-bold border-none outline-none flex-1 bg-slate-700 text-white shadow-inner">
-                         {STANDARD_MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                      <input type="number" value={newMonthYear} onChange={e => setNewMonthYear(parseInt(e.target.value))} className="p-3 rounded-xl text-xs font-bold w-24 border-none outline-none bg-slate-700 text-white shadow-inner" min="2020" max="2035" />
-                      <button onClick={handleAddMonth} className="bg-indigo-500 text-white p-3 rounded-xl hover:bg-indigo-600 transition-colors shadow-md"><Plus size={16}/></button>
-                   </div>
+        {/* TAB: CONTRATOS */}
+        {activeTab === 'contratos' && (
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest">Gerenciar Clientes</h3>
+                    <button onClick={() => setEditingContract({ id: `new_${Date.now()}`, Status_Contrato: 'Ativo', Tipo_Servico: 'Agency' })} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/30">
+                        <Plus size={16} /> Novo Cliente
+                    </button>
                 </div>
-                
-                <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                   {displayMonths.map(m => (
-                      <div key={m} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm group">
-                         <span className={`text-xs font-black ${m === selectedMonth ? 'text-indigo-600' : 'text-slate-600'}`}>{m}</span>
-                         <button onClick={() => handleDeleteMonth(m)} className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={14}/></button>
-                      </div>
-                   ))}
+
+                {editingContract && (
+                    <div className="bg-white border-2 border-indigo-100 p-6 rounded-[2rem] shadow-2xl animate-fade-in relative z-10">
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Nome do Cliente</label>
+                                <input type="text" value={editingContract.Cliente || ''} onChange={e => setEditingContract({...editingContract, Cliente: e.target.value})} className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-indigo-500/20" autoFocus />
+                            </div>
+                             <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Tipo de Serviço</label>
+                                <select 
+                                    value={editingContract.Tipo_Servico || 'Agency'} 
+                                    onChange={e => setEditingContract({...editingContract, Tipo_Servico: e.target.value as any})}
+                                    className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold border-none outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                >
+                                    <option value="Agency">Agency (Padrão)</option>
+                                    <option value="UI-Z">UI-Z (Assinatura)</option>
+                                </select>
+                            </div>
+                         </div>
+
+                         {/* CAMPOS DINÂMICOS BASEADOS NO TIPO DE SERVIÇO */}
+                         {editingContract.Tipo_Servico === 'UI-Z' ? (
+                             <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-4 grid grid-cols-2 gap-4">
+                                 <div>
+                                    <label className="text-[10px] font-bold text-indigo-400 uppercase">Taxa de Setup (Única)</label>
+                                    <input type="number" value={editingContract.UIZ_Setup_Fee || 0} onChange={e => setEditingContract({...editingContract, UIZ_Setup_Fee: parseFloat(e.target.value)})} className="w-full p-2 bg-white rounded-lg text-sm font-bold outline-none" placeholder="Ex: 99.90" />
+                                 </div>
+                                 <div>
+                                    <label className="text-[10px] font-bold text-indigo-400 uppercase">Mensalidade UI-Z</label>
+                                    <input type="number" value={editingContract.UIZ_Valor_Mensal || 0} onChange={e => setEditingContract({...editingContract, UIZ_Valor_Mensal: parseFloat(e.target.value)})} className="w-full p-2 bg-white rounded-lg text-sm font-bold outline-none" placeholder="Ex: 49.90" />
+                                 </div>
+                             </div>
+                         ) : (
+                             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-4 grid grid-cols-2 gap-4">
+                                 <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Data Início</label>
+                                    <input type="date" value={editingContract.Data_Inicio || ''} onChange={e => setEditingContract({...editingContract, Data_Inicio: e.target.value})} className="w-full p-2 bg-white rounded-lg text-xs font-bold outline-none" />
+                                 </div>
+                                 <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Renovação</label>
+                                    <input type="date" value={editingContract.Data_Renovacao || ''} onChange={e => setEditingContract({...editingContract, Data_Renovacao: e.target.value})} className="w-full p-2 bg-white rounded-lg text-xs font-bold outline-none" />
+                                 </div>
+                             </div>
+                         )}
+
+                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Status</label>
+                                <select value={editingContract.Status_Contrato} onChange={e => setEditingContract({...editingContract, Status_Contrato: e.target.value as any})} className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold border-none outline-none">
+                                    <option value="Ativo">Ativo</option>
+                                    <option value="Inativo">Inativo</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Dia Vencimento</label>
+                                <input type="number" value={editingContract.Dia_Pagamento || ''} onChange={e => setEditingContract({...editingContract, Dia_Pagamento: parseInt(e.target.value)})} className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold border-none outline-none" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Origem</label>
+                                <select value={editingContract.Origem || 'Indicação'} onChange={e => setEditingContract({...editingContract, Origem: e.target.value as any})} className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold border-none outline-none">
+                                    <option value="Indicação">Indicação</option>
+                                    <option value="Ads">Ads</option>
+                                    <option value="Outbound">Outbound</option>
+                                    <option value="Orgânico">Orgânico</option>
+                                    <option value="Parceria">Parceria</option>
+                                </select>
+                            </div>
+                         </div>
+                         
+                         <div className="flex gap-2 justify-end">
+                             <button onClick={() => setEditingContract(null)} className="px-4 py-2 text-slate-400 font-bold text-xs hover:text-slate-600">Cancelar</button>
+                             <button onClick={handleSaveContract} disabled={isSubmitting} className="px-6 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs shadow-lg hover:bg-slate-800 transition-all">
+                                 {isSubmitting ? 'Salvando...' : 'Confirmar'}
+                             </button>
+                         </div>
+                    </div>
+                )}
+
+                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {contracts.map(c => (
+                        <div key={c.id} className="group flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-2 h-2 rounded-full ${c.Status_Contrato === 'Ativo' ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                <div>
+                                    <p className="font-bold text-slate-800 text-sm">{c.Cliente}</p>
+                                    <div className="flex gap-2">
+                                        <span className="text-[10px] text-slate-400 uppercase">{c.Tipo_Servico || 'Agency'}</span>
+                                        {c.Tipo_Servico === 'UI-Z' && <span className="text-[10px] text-indigo-500 font-bold uppercase">R$ {c.UIZ_Valor_Mensal}/mês</span>}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => setEditingContract(c)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Settings size={14} /></button>
+                                <button onClick={() => handleDeleteContract(c.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                            </div>
+                        </div>
+                    ))}
                 </div>
-              </div>
-           </div>
-        </div>
-      )}
+            </div>
+        )}
+
+        {/* TAB: RESULTADOS */}
+        {activeTab === 'resultados' && (
+             <div className="space-y-6">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest">Lançamentos de {selectedMonth}</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                     {/* Lista de Clientes para Lançar */}
+                     <div className="md:col-span-1 space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                        {contracts.filter(c => c.Status_Contrato === 'Ativo').map(c => {
+                             const hasResult = monthlyResults.find(r => r.contractId === c.id && r.Mes_Referencia === selectedMonth);
+                             return (
+                                 <button 
+                                    key={c.id} 
+                                    onClick={() => {
+                                        // Se já existe resultado, edita. Se não, cria pré-preenchido
+                                        if (hasResult) {
+                                            setEditingResult(hasResult);
+                                        } else {
+                                            setEditingResult({
+                                                contractId: c.id,
+                                                Mes_Referencia: selectedMonth,
+                                                // Pré-preencher valores se for UI-Z ou Agency
+                                                Receita_Mensal_BRL: c.Tipo_Servico === 'UI-Z' ? (c.UIZ_Valor_Mensal || 0) : (c.Valor_Sugerido_Renovacao || 0),
+                                                Status_Mensal: 'Ativo',
+                                                Conteudos_Contratados: 0,
+                                                Conteudos_Entregues: 0,
+                                                Conteudos_Nao_Entregues: 0
+                                            });
+                                        }
+                                    }}
+                                    className={`w-full text-left p-3 rounded-xl border text-xs font-bold transition-all flex justify-between items-center ${hasResult ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-300'}`}
+                                 >
+                                    {c.Cliente}
+                                    {hasResult && <Check size={12} />}
+                                 </button>
+                             )
+                        })}
+                     </div>
+
+                     {/* Form de Edição */}
+                     <div className="md:col-span-2">
+                        {editingResult ? (
+                            <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 animate-fade-in">
+                                <h4 className="text-xs font-black text-slate-900 uppercase mb-4">
+                                    Lançando: {contracts.find(c => c.id === editingResult.contractId)?.Cliente}
+                                </h4>
+                                
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Receita Real ({selectedMonth})</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-3 text-slate-400 text-xs font-bold">R$</span>
+                                            <input 
+                                                type="number" 
+                                                value={editingResult.Receita_Mensal_BRL || 0} 
+                                                onChange={e => setEditingResult({...editingResult, Receita_Mensal_BRL: parseFloat(e.target.value)})}
+                                                className="w-full p-3 pl-8 bg-white rounded-xl text-lg font-black text-slate-800 border-none outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase">Contratados</label>
+                                            <input type="number" value={editingResult.Conteudos_Contratados || 0} onChange={e => setEditingResult({...editingResult, Conteudos_Contratados: parseInt(e.target.value)})} className="w-full p-2 bg-white rounded-xl font-bold text-center outline-none" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-emerald-500 uppercase">Entregues</label>
+                                            <input type="number" value={editingResult.Conteudos_Entregues || 0} onChange={e => setEditingResult({...editingResult, Conteudos_Entregues: parseInt(e.target.value)})} className="w-full p-2 bg-white border border-emerald-100 rounded-xl font-bold text-center outline-none text-emerald-700" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-rose-500 uppercase">Pendentes</label>
+                                            <input type="number" value={editingResult.Conteudos_Nao_Entregues || 0} onChange={e => setEditingResult({...editingResult, Conteudos_Nao_Entregues: parseInt(e.target.value)})} className="w-full p-2 bg-white border border-rose-100 rounded-xl font-bold text-center outline-none text-rose-700" />
+                                        </div>
+                                    </div>
+
+                                    <button onClick={handleSaveResult} disabled={isSubmitting} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg">
+                                        {isSubmitting ? 'Salvando...' : 'Confirmar Lançamento'}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-200 rounded-[2rem]">
+                                <FileText size={32} className="mb-2 opacity-50"/>
+                                <p className="text-xs font-bold uppercase">Selecione um cliente ao lado</p>
+                            </div>
+                        )}
+                     </div>
+                </div>
+             </div>
+        )}
+
+        {/* TAB: CUSTOS */}
+        {activeTab === 'custos' && (
+             <div className="space-y-6">
+                 <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest">Despesas de {selectedMonth}</h3>
+                    <button onClick={() => setEditingCost({ id: `new_cost_${Date.now()}`, Mes_Referencia: selectedMonth, Ativo_no_Mes: true, Categoria: 'Operacional', Tipo: 'Fixo' })} className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700 transition-all shadow-lg shadow-rose-500/30">
+                        <Plus size={16} /> Nova Despesa
+                    </button>
+                </div>
+
+                {editingCost && (
+                    <div className="bg-white border-2 border-rose-100 p-6 rounded-[2rem] shadow-xl animate-fade-in relative z-10 mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Descrição</label>
+                                <input type="text" value={editingCost.Tipo_Custo || ''} onChange={e => setEditingCost({...editingCost, Tipo_Custo: e.target.value})} className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold border-none outline-none" placeholder="Ex: Editor Freelancer" autoFocus />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Valor (R$)</label>
+                                <input type="number" value={editingCost.Valor_Mensal_BRL || 0} onChange={e => setEditingCost({...editingCost, Valor_Mensal_BRL: parseFloat(e.target.value)})} className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold border-none outline-none" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Categoria</label>
+                                <select value={editingCost.Categoria} onChange={e => setEditingCost({...editingCost, Categoria: e.target.value as any})} className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold outline-none">
+                                    <option value="Operacional">Operacional</option>
+                                    <option value="Administrativo">Administrativo</option>
+                                    <option value="Impostos">Impostos</option>
+                                    <option value="Outros">Outros</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Recorrência</label>
+                                <select value={editingCost.Tipo} onChange={e => setEditingCost({...editingCost, Tipo: e.target.value as any})} className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold outline-none">
+                                    <option value="Fixo">Fixo</option>
+                                    <option value="Variável">Variável</option>
+                                    <option value="Extraordinário">Extraordinário</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                             <button onClick={() => setEditingCost(null)} className="px-4 py-2 text-slate-400 font-bold text-xs hover:text-slate-600">Cancelar</button>
+                             <button onClick={handleSaveCost} disabled={isSubmitting} className="px-6 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs shadow-lg hover:bg-slate-800 transition-all">
+                                 {isSubmitting ? 'Salvando...' : 'Confirmar Despesa'}
+                             </button>
+                         </div>
+                    </div>
+                )}
+
+                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                    {allCosts.filter(c => c.Mes_Referencia === selectedMonth).map(c => (
+                        <div key={c.id} className="group flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 hover:border-rose-200 hover:shadow-md transition-all">
+                             <div>
+                                <p className="font-bold text-slate-800 text-sm">{c.Tipo_Custo}</p>
+                                <span className="text-[10px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded uppercase">{c.Categoria}</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className="font-mono font-bold text-rose-600">{privacyMode ? '••••' : formatCurrency(c.Valor_Mensal_BRL)}</span>
+                                <button onClick={() => handleDeleteCost(c.id)} className="p-2 text-slate-300 hover:text-rose-600 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                            </div>
+                        </div>
+                    ))}
+                    {allCosts.filter(c => c.Mes_Referencia === selectedMonth).length === 0 && (
+                        <p className="text-center text-slate-400 text-xs font-bold py-8">Nenhuma despesa lançada neste mês.</p>
+                    )}
+                </div>
+             </div>
+        )}
+
+      </div>
     </div>
   );
 };
