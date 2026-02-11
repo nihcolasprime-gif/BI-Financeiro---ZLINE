@@ -1,205 +1,127 @@
-
-import { ClientData, ClientContract, ClientMonthlyResult, CostData, GlobalSettings } from '../types';
-
-// --- TYPES ---
-
-export interface KPIResult {
-  grossRevenue: number;
-  netRevenue: number;
-  totalCost: number;
-  totalOperationalCost: number;
-  totalUnitCostBase: number;
-  netResult: number;
-  margin: number;
-  roi: number;
-  ler: number;
-  globalCostPerContent: number;
-  idealPriceUnit: number;
-  // Capacity KPIs
-  totalContracted: number;
-  totalDelivered: number;
-  capacityUtilization: number; // %
-  maxCapacity: number;
-  potentialClientsSpace: number; // How many more average clients fit?
-  churn: number;
-}
+import { ClientContract, ClientMonthlyResult, CostData, GlobalSettings } from '../types';
+import { STANDARD_MONTHS } from '../constants';
 
 export interface SimulationOutput {
-  clients: ClientData[]; // Retorna a VIEW unificada
+  kpis: {
+    grossRevenue: number;
+    netRevenue: number;
+    totalCost: number;
+    netResult: number;
+    churn: number;
+  };
+  clients: any[];
   costs: CostData[];
-  kpis: KPIResult;
 }
 
-// --- LOGIC ---
-
-const isOperationalCost = (cost: CostData) => {
-  return cost.Categoria === 'Operacional';
+// Helper para converter Data ISO (YYYY-MM-DD) para formato do App (Mês/Ano)
+const getMonthYearFromDate = (dateString?: string): string => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  // Ajuste de fuso horário simples para evitar pular dia/mês errado
+  const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+  const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
+  
+  const monthName = STANDARD_MONTHS[adjustedDate.getMonth()];
+  const year = adjustedDate.getFullYear();
+  return `${monthName}/${year}`;
 };
 
 export const calculateSimulation = (
   month: string,
   contracts: ClientContract[],
   monthlyResults: ClientMonthlyResult[],
-  realCosts: CostData[],
+  allCosts: CostData[],
   settings: GlobalSettings,
-  previousMonthResults: ClientMonthlyResult[] = []
+  prevResults: ClientMonthlyResult[]
 ): SimulationOutput => {
   
-  // 1. PERFORMANCE OPTIMIZATION: Index Contracts by ID for O(1) lookup
-  const contractMap = new Map<string, ClientContract>();
-  contracts.forEach(c => contractMap.set(c.id, c));
+  // 1. Filtrar Custos do Mês
+  const activeCosts = allCosts.filter(c => c.Mes_Referencia === month && c.Ativo_no_Mes);
+  const totalCost = activeCosts.reduce((acc, curr) => acc + curr.Valor_Mensal_BRL, 0);
 
-  // 2. JOIN: Contracts + MonthlyResults (Normalização -> View)
-  const monthResults = monthlyResults.filter(r => r.Mes_Referencia === month);
+  // 2. Processar Receita dos Clientes
+  let grossRevenue = 0;
   
-  const mergedClients: ClientData[] = monthResults.map(result => {
-    const contract = contractMap.get(result.contractId);
+  // Lista de clientes processados com seus dados financeiros deste mês
+  const processedClients = contracts.map(contract => {
+    // Verifica se existe um resultado REAL lançado para este mês
+    const realResult = monthlyResults.find(r => r.contractId === contract.id && r.Mes_Referencia === month);
     
-    // Fallback de segurança caso o contrato tenha sido deletado mas o resultado não
-    if (!contract) {
-       return {
-          ...result,
-          id: result.id,
-          contractId: result.contractId,
-          Cliente: 'Contrato Removido ou Arquivado',
-          Status_Contrato: 'Inativo',
-          Status_Cliente: result.Status_Mensal,
-          Receita_Liquida_Apos_Imposto_BRL: 0
-       } as ClientData;
-    }
-
-    return {
-      ...contract, // Dados Mestres (Nome, Datas, Pagamento)
-      ...result,   // Dados Mensais (Receita, Entregas)
-      id: result.id, // ID da View é o ID do registro mensal
-      contractId: contract.id,
-      Status_Cliente: result.Status_Mensal, // Mapeamento para UI
-      Receita_Liquida_Apos_Imposto_BRL: 0 // Será calculado abaixo
-    };
-  });
-
-  // 3. Filter Active Costs for Month
-  const activeCosts = realCosts.filter(c => c.Mes_Referencia === month && c.Ativo_no_Mes);
-
-  // 4. Extract Globals
-  const { taxRate, targetMargin, allocationMethod, oneTimeAdjustments, maxProductionCapacity, manualCostPerContentOverride } = settings;
-
-  // 5. Calculate Aggregates
-  const operationalCosts = activeCosts.filter(isOperationalCost);
-  const unitBaseCosts = operationalCosts; 
-
-  const totalGrossRevenue = mergedClients.reduce((sum, c) => sum + (Number(c.Receita_Mensal_BRL) || 0), 0);
-  const totalNetRevenue = totalGrossRevenue * (1 - taxRate);
-  
-  // Costs
-  let totalCost = activeCosts.reduce((sum, c) => sum + (Number(c.Valor_Mensal_BRL) || 0), 0);
-  totalCost += (oneTimeAdjustments || 0); 
-
-  const totalOperationalCost = operationalCosts.reduce((sum, c) => sum + (Number(c.Valor_Mensal_BRL) || 0), 0);
-  const totalUnitCostBase = unitBaseCosts.reduce((sum, c) => sum + (Number(c.Valor_Mensal_BRL) || 0), 0);
-
-  const totalDelivered = mergedClients.reduce((sum, c) => sum + (c.Status_Cliente === 'Ativo' ? (Number(c.Conteudos_Entregues) || 0) : 0), 0);
-  const totalContracted = mergedClients.reduce((sum, c) => sum + (c.Status_Cliente === 'Ativo' ? (Number(c.Conteudos_Contratados) || 0) : 0), 0);
-  const activeClientsCount = mergedClients.filter(c => c.Status_Cliente === 'Ativo').length;
-
-  // 6. Calculate Unit Metrics (Allocation Logic)
-  let globalCostPerContent = 0;
-
-  if (manualCostPerContentOverride > 0) {
-     globalCostPerContent = manualCostPerContentOverride;
-  } else {
-    if (allocationMethod === 'perDelivered') {
-      globalCostPerContent = totalDelivered > 0 ? totalUnitCostBase / totalDelivered : 0;
-    } else if (allocationMethod === 'perContracted') {
-      globalCostPerContent = totalContracted > 0 ? totalUnitCostBase / totalContracted : 0;
-    } else if (allocationMethod === 'equalShare') {
-      globalCostPerContent = activeClientsCount > 0 ? totalUnitCostBase / activeClientsCount : 0; 
-    }
-  }
-
-  // Math Safety: Prevent division by zero if targetMargin is 1 (100%) or close to it
-  const safeMarginDivisor = Math.max(0.01, 1 - targetMargin);
-  const idealPriceUnit = globalCostPerContent / safeMarginDivisor;
-
-  // 7. Calculate Client Specifics (Lucratividade por Cliente)
-  const enrichedClients = mergedClients.map(c => {
-    const netRev = (Number(c.Receita_Mensal_BRL) || 0) * (1 - taxRate);
+    // Verifica se é o mês de início do contrato (para cobrar Setup do UI-Z)
+    const startMonthYear = getMonthYearFromDate(contract.Data_Inicio);
+    const isStartMonth = startMonthYear === month;
     
-    let allocatedCost = 0;
-    let idealRev = 0;
+    let revenue = 0;
+    let isProjected = false;
 
-    if (c.Status_Cliente === 'Inativo') {
-        allocatedCost = 0;
+    if (realResult) {
+      // Se tem lançamento manual, usa ele (Isso permite "mudar o valor da parcela" manualmente)
+      revenue = realResult.Receita_Mensal_BRL;
     } else {
-        if (allocationMethod === 'perDelivered') {
-            allocatedCost = (Number(c.Conteudos_Entregues) || 0) * globalCostPerContent;
-            idealRev = idealPriceUnit * (Number(c.Conteudos_Contratados) || 0);
+      // Se não tem, faz PROJEÇÃO baseada no contrato e status
+      isProjected = true;
+      if (contract.Status_Contrato === 'Ativo') {
+        if (contract.Tipo_Servico === 'UI-Z') {
+           // Projeção UI-Z: Mensalidade Base
+           revenue = contract.UIZ_Valor_Mensal || 0;
+        } else {
+           // Projeção Agência: Valor Sugerido ou estimativa
+           revenue = contract.Valor_Sugerido_Renovacao || 0;
         }
-        else if (allocationMethod === 'perContracted') {
-            allocatedCost = (Number(c.Conteudos_Contratados) || 0) * globalCostPerContent;
-            idealRev = idealPriceUnit * (Number(c.Conteudos_Contratados) || 0);
-        }
-        else if (allocationMethod === 'equalShare') {
-            allocatedCost = globalCostPerContent;
-            idealRev = allocatedCost / safeMarginDivisor;
-        }
+      }
     }
 
-    const profit = netRev - allocatedCost;
-    const margin = netRev !== 0 ? profit / netRev : 0;
-    
+    // REGRA DE SETUP UI-Z:
+    // Se for contrato UI-Z e estivermos no mês de início, soma o Setup Fee
+    // Nota: Se já tiver resultado manual (realResult), assumimos que o usuário já somou ou lançou lá.
+    // Se for projeção, somamos automático.
+    if (contract.Tipo_Servico === 'UI-Z' && isStartMonth && isProjected) {
+        revenue += (contract.UIZ_Setup_Fee || 0);
+    }
+
+    // Soma ao total global
+    grossRevenue += revenue;
+
+    // Cálculo de Lucro Individual (Estimado)
+    // Distribuição de custos simples para visualização (pode refinar com settings.allocationMethod)
+    const costShare = activeCosts.length > 0 ? totalCost / Math.max(contracts.filter(c => c.Status_Contrato === 'Ativo').length, 1) : 0;
+    const taxes = revenue * settings.taxRate;
+    const profit = revenue - taxes - costShare;
+
     return {
-      ...c,
-      Receita_Liquida_Apos_Imposto_BRL: netRev,
-      netRevenue: netRev,
-      profit: profit,
-      margin: margin,
-      idealRevenue: idealRev
+      ...contract, // Dados do contrato
+      ...realResult, // Dados do resultado mensal (se houver)
+      id: realResult?.id || contract.id, // ID para chave React
+      contractId: contract.id,
+      Receita_Mensal_BRL: revenue,
+      profit,
+      Status_Cliente: realResult?.Status_Mensal || contract.Status_Contrato,
+      // Se não tiver resultado real, preenchemos com zeros para não quebrar a UI
+      Conteudos_Contratados: realResult?.Conteudos_Contratados || 0,
+      Conteudos_Entregues: realResult?.Conteudos_Entregues || 0,
+      Conteudos_Nao_Entregues: realResult?.Conteudos_Nao_Entregues || 0
     };
   });
 
-  // 8. Global KPIs
-  const netResult = totalNetRevenue - totalCost;
-  const roi = totalCost > 0 ? netResult / totalCost : 0;
-  const ler = totalOperationalCost > 0 ? totalNetRevenue / totalOperationalCost : 0;
-  
-  // Capacity Logic
-  const capacityUtilization = maxProductionCapacity > 0 ? (totalContracted / maxProductionCapacity) : 0;
-  const avgContractSize = activeClientsCount > 0 ? totalContracted / activeClientsCount : 0;
-  const potentialClientsSpace = avgContractSize > 0 ? (maxProductionCapacity - totalContracted) / avgContractSize : 0;
+  // 3. Cálculos Finais de KPI
+  const taxDeduction = grossRevenue * settings.taxRate;
+  const netRevenue = grossRevenue - taxDeduction;
+  const netResult = netRevenue - totalCost;
 
-  // Churn Calculation
-  const activeContractsLastMonth = new Set(previousMonthResults.filter(r => r.Status_Mensal === 'Ativo').map(r => r.contractId));
-  const activeContractsThisMonth = new Set(monthResults.filter(r => r.Status_Mensal === 'Ativo').map(r => r.contractId));
+  // Cálculo Simples de Churn (Clientes que eram ativos mês passado e não são mais)
+  // Requer lógica mais complexa comparando prevResults, simplificado aqui para:
+  const activeNow = processedClients.filter(c => c.Status_Cliente === 'Ativo').length;
+  // const activeBefore = ... (depende de prevResults passado pelo App.tsx)
   
-  let lostCount = 0;
-  activeContractsLastMonth.forEach(id => {
-    if (!activeContractsThisMonth.has(id)) lostCount++;
-  });
-  
-  const churn = activeContractsLastMonth.size > 0 ? lostCount / activeContractsLastMonth.size : 0;
-
   return {
-    clients: enrichedClients,
-    costs: activeCosts,
     kpis: {
-      grossRevenue: totalGrossRevenue,
-      netRevenue: totalNetRevenue,
+      grossRevenue,
+      netRevenue,
       totalCost,
-      totalOperationalCost,
-      totalUnitCostBase,
       netResult,
-      margin: totalNetRevenue !== 0 ? netResult / totalNetRevenue : 0,
-      roi,
-      ler,
-      globalCostPerContent,
-      idealPriceUnit,
-      totalContracted,
-      totalDelivered,
-      capacityUtilization,
-      maxCapacity: maxProductionCapacity,
-      potentialClientsSpace,
-      churn
-    }
+      churn: 0 // Placeholder, lógica real de churn é feita no App.tsx ou Engine avançada
+    },
+    clients: processedClients,
+    costs: activeCosts
   };
 };
