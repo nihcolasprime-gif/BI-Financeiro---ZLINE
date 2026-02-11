@@ -1,11 +1,10 @@
-
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, DollarSign, Activity, History, Users, TrendingDown,
   Trophy, Eye, EyeOff, Settings, AlertCircle, Search, X, 
   FileText, Calendar, Clock, ArrowUpRight, TrendingUp, Filter, Target, Repeat, BarChart3, Rocket, Wrench, Briefcase, Calculator, PieChart, Layers, RotateCcw, Wallet, ArrowRight, Check
 } from 'lucide-react';
-import { INITIAL_CONTRACTS, INITIAL_MONTHLY_RESULTS, ALL_COSTS as INITIAL_COSTS, MONTHS as INITIAL_MONTHS, INITIAL_GROWTH_DATA, STANDARD_MONTHS } from './constants';
+import { STANDARD_MONTHS } from './constants'; // Removemos imports de INITIAL_DATA pois vêm do DB agora
 import KPICard from './components/KPICard';
 import { ConfigurationsPanel } from './components/ConfigurationsPanel';
 import { 
@@ -13,28 +12,19 @@ import {
 } from './components/Charts';
 import { formatCurrency, formatPercent, sortMonths, getMonthComparableValue } from './utils';
 import { ClientData, CostData, GlobalSettings, ClientContract, ClientMonthlyResult, MonthlyGrowthData } from './types';
-import { calculateSimulation, SimulationOutput } from './utils/configAudit';
+import { calculateSimulation } from './utils/configAudit';
 
-// Consolidação de Abas conforme solicitado
+// --- IMPORTAÇÃO DO CÉREBRO NOVO ---
+import { fetchDashboardData } from './database';
+
 type TabType = 'executive' | 'growth_tools' | 'contracts_ltv' | 'fin_ops' | 'annual' | 'settings';
 type StatusFilterType = 'Todos' | 'Ativo' | 'Inativo';
 
-const STORAGE_KEYS = {
-  CONTRACTS: 'zline_data_contracts',
-  RESULTS: 'zline_data_monthly_results',
-  COSTS: 'zline_data_costs',
-  MONTHS: 'zline_data_months',
-  GROWTH: 'zline_data_growth',
-  SETTINGS: 'zline_data_settings',
-};
-
-// --- SUB-COMPONENTS FOR TOOLS ---
-
+// Sub-components (Calculators) mantidos iguais
 const ProLaboreCalculator = ({ grossRevenue, currentProfit, costs, taxRate }: { grossRevenue: number, currentProfit: number, costs: CostData[], taxRate: number }) => {
     const [partners, setPartners] = useState(1);
     const [roleLevel, setRoleLevel] = useState<'operacional' | 'estrategico'>('operacional');
     
-    // 1. Detect Current Pro-Labore from Costs (REAL DATA)
     const currentProLaboreTotal = useMemo(() => {
         if (!costs || costs.length === 0) return 0;
         return costs
@@ -45,20 +35,15 @@ const ProLaboreCalculator = ({ grossRevenue, currentProfit, costs, taxRate }: { 
             .reduce((acc, curr) => acc + curr.Valor_Mensal_BRL, 0);
     }, [costs]);
 
-    // 2. Market Logic
     const marketPercent = useMemo(() => {
-        if (roleLevel === 'operacional') return { min: 0.15, max: 0.25, ideal: 0.20 }; // 20% da Receita Bruta
-        return { min: 0.10, max: 0.15, ideal: 0.12 }; // 12% da Receita Bruta
+        if (roleLevel === 'operacional') return { min: 0.15, max: 0.25, ideal: 0.20 };
+        return { min: 0.10, max: 0.15, ideal: 0.12 };
     }, [roleLevel]);
 
     const suggestedTotal = grossRevenue * marketPercent.ideal;
-    
-    // 3. Impact Simulation
-    // Impacto no CAIXA = Diferença entre o que pago hoje vs Sugerido
-    const cashImpact = currentProLaboreTotal - suggestedTotal; // Se positivo, sobra caixa. Se negativo, falta.
+    const cashImpact = currentProLaboreTotal - suggestedTotal;
     const newProfit = currentProfit + cashImpact; 
     
-    // Safety for margins
     const netRevenue = grossRevenue * (1 - taxRate);
     const currentMargin = netRevenue > 0 ? currentProfit / netRevenue : 0;
     const newMargin = netRevenue > 0 ? newProfit / netRevenue : 0;
@@ -84,7 +69,6 @@ const ProLaboreCalculator = ({ grossRevenue, currentProfit, costs, taxRate }: { 
                 </div>
             </div>
 
-            {/* Controls */}
             <div className="space-y-4 mb-6">
                 <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Perfil dos Sócios</label>
@@ -105,7 +89,6 @@ const ProLaboreCalculator = ({ grossRevenue, currentProfit, costs, taxRate }: { 
                 </div>
             </div>
 
-            {/* Impact Analysis */}
             <div className="mt-auto bg-slate-50 rounded-2xl p-4 border border-slate-200">
                 <p className="text-[10px] font-black text-slate-400 uppercase mb-3 flex items-center gap-1">
                     <Activity size={12} /> Impacto no Resultado Líquido
@@ -137,8 +120,8 @@ const ProLaboreCalculator = ({ grossRevenue, currentProfit, costs, taxRate }: { 
 const MarkupCalculator = () => {
     const [custoHora, setCustoHora] = useState(50);
     const [horas, setHoras] = useState(10);
-    const [imposto, setImposto] = useState(10); // %
-    const [margemAlvo, setMargemAlvo] = useState(20); // %
+    const [imposto, setImposto] = useState(10); 
+    const [margemAlvo, setMargemAlvo] = useState(20); 
     const [custosExtras, setCustosExtras] = useState(0);
 
     const custoBase = (custoHora * horas) + custosExtras;
@@ -198,7 +181,7 @@ const MarkupCalculator = () => {
 const ScenarioSimulator = ({ currentNetResult, currentRevenue, currentCost }: { currentNetResult: number, currentRevenue: number, currentCost: number }) => {
     const [priceVar, setPriceVar] = useState(0);
     const [costVar, setCostVar] = useState(0);
-    const [churnVar, setChurnVar] = useState(0); // Simulating revenue loss
+    const [churnVar, setChurnVar] = useState(0);
 
     const handleReset = () => {
         setPriceVar(0);
@@ -272,37 +255,16 @@ const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>('Todos');
   
-  // --- STATE NORMALIZADO ---
-  const [contracts, setContracts] = useState<ClientContract[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.CONTRACTS);
-    if (saved) return JSON.parse(saved);
-    return INITIAL_CONTRACTS; 
-  });
-
-  const [monthlyResults, setMonthlyResults] = useState<ClientMonthlyResult[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.RESULTS);
-    if (saved) return JSON.parse(saved);
-    return INITIAL_MONTHLY_RESULTS;
-  });
-
-  const [allCosts, setAllCosts] = useState<CostData[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.COSTS);
-    return saved ? JSON.parse(saved) : INITIAL_COSTS;
-  });
-
-  const [availableMonths, setAvailableMonths] = useState<string[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.MONTHS);
-    return saved ? JSON.parse(saved) : INITIAL_MONTHS;
-  });
-
-  const [growthData, setGrowthData] = useState<MonthlyGrowthData[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.GROWTH);
-    return saved ? JSON.parse(saved) : INITIAL_GROWTH_DATA;
-  });
-
-  const [settings, setSettings] = useState<GlobalSettings>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    const defaultSettings: GlobalSettings = {
+  // --- STATE GERENCIADO PELO DB ---
+  // Inicializamos vazio pois vamos buscar do Supabase
+  const [contracts, setContracts] = useState<ClientContract[]>([]);
+  const [monthlyResults, setMonthlyResults] = useState<ClientMonthlyResult[]>([]);
+  const [allCosts, setAllCosts] = useState<CostData[]>([]);
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [growthData, setGrowthData] = useState<MonthlyGrowthData[]>([]);
+  
+  // Settings com Default seguro
+  const [settings, setSettings] = useState<GlobalSettings>({
       taxRate: 0.10,
       targetMargin: 0.20,
       maxProductionCapacity: 140,
@@ -318,16 +280,45 @@ const App: React.FC = () => {
         minLtvCac: 3.0,
         safeCapacityLimit: 0.85
       }
-    };
-    
-    if (saved) {
-       const parsed = JSON.parse(saved);
-       return { ...defaultSettings, ...parsed, benchmarks: { ...defaultSettings.benchmarks, ...(parsed.benchmarks || {}) } };
-    }
-    return defaultSettings;
   });
 
   const [selectedMonth, setSelectedMonth] = useState<string>('');
+
+  // --- EFEITO DE CARREGAMENTO (INIT) ---
+  useEffect(() => {
+    async function loadData() {
+      // setShowSplash(true); // Mantém o splash enquanto carrega
+      const data = await fetchDashboardData();
+      
+      if (data) {
+        setContracts(data.contracts);
+        setMonthlyResults(data.monthlyResults);
+        setAllCosts(data.costs);
+        
+        // Se houver settings salvas, usamos. Se não, mantemos o default
+        if (data.settings) {
+          setSettings(prev => ({ ...prev, ...data.settings, benchmarks: { ...prev.benchmarks, ...(data.settings.benchmarks || {}) } }));
+        }
+
+        setGrowthData(data.growthData);
+
+        // Lógica para definir meses disponíveis baseados nos dados
+        // Extraímos todos os meses únicos dos resultados e custos
+        const monthsFromResults = new Set(data.monthlyResults.map(r => r.Mes_Referencia));
+        const monthsFromCosts = new Set(data.costs.map(c => c.Mes_Referencia));
+        const uniqueMonths = Array.from(new Set([...monthsFromResults, ...monthsFromCosts]));
+        
+        // Se o DB estiver vazio, usamos uma lista padrão para não quebrar a UI
+        const finalMonths = uniqueMonths.length > 0 ? uniqueMonths : ['Fev/2026', 'Jan/2026', 'Dez/2025'];
+        setAvailableMonths(finalMonths);
+      }
+
+      // Pequeno delay para transição suave do splash
+      setTimeout(() => setShowSplash(false), 800);
+    }
+
+    loadData();
+  }, []);
 
   // Stable Sorted Months
   const sortedMonths = useMemo(() => sortMonths(availableMonths), [availableMonths]);
@@ -351,22 +342,10 @@ const App: React.FC = () => {
     }
   }, [availableMonths]);
 
-  // Persistência
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.CONTRACTS, JSON.stringify(contracts));
-    localStorage.setItem(STORAGE_KEYS.RESULTS, JSON.stringify(monthlyResults));
-    localStorage.setItem(STORAGE_KEYS.COSTS, JSON.stringify(allCosts));
-    localStorage.setItem(STORAGE_KEYS.MONTHS, JSON.stringify(availableMonths));
-    localStorage.setItem(STORAGE_KEYS.GROWTH, JSON.stringify(growthData));
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-  }, [contracts, monthlyResults, allCosts, availableMonths, growthData, settings]);
+  // --- REMOVIDO: useEffect de salvar no localStorage ---
+  // Agora a persistência será via funções de Save no Supabase (Próximo Passo)
 
-  useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 2200);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // --- ENGINE INTEGRATION ---
+  // --- ENGINE INTEGRATION (Mantido igual) ---
   const brain = useMemo(() => {
     const resultsByMonth = new Map<string, ClientMonthlyResult[]>();
     monthlyResults.forEach(r => {
@@ -437,14 +416,12 @@ const App: React.FC = () => {
     };
   }, [rawView, searchTerm, statusFilter]);
 
-  // --- GROWTH METRICS CALCULATION (REFACTORED) ---
+  // --- GROWTH METRICS CALCULATION ---
   const growthMetrics = useMemo(() => {
       if (!currentView) return null;
       
-      // FIX: Ensure we are using the user-defined growth data, defaulting to 0 if not found
       const currentGrowthData = growthData.find(g => g.month === selectedMonth) || { adSpend: 0 };
       
-      // Calculate New Clients in this Month
       const currentMonthComparable = getMonthComparableValue(selectedMonth);
       const newClientsCount = contracts.filter(c => {
           if (!c.Data_Inicio) return false;
@@ -602,10 +579,8 @@ const App: React.FC = () => {
               </div>
             )}
             
-            {/* CONSOLIDATED TAB: GROWTH & TOOLS */}
             {activeTab === 'growth_tools' && growthMetrics && (
                 <div className="space-y-8">
-                     {/* KPIs de Growth - AGORA CONECTADOS AO INPUT REAL */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         <KPICard title="Investimento (Ads)" value={growthMetrics.adSpend} icon={<Target />} colorCondition="cost-warning" privacyMode={isPrivacyMode} subtitle="Configurado em Ajustes" onClick={() => handleShortcut('settings')} />
                         <KPICard title="Novos Clientes" value={growthMetrics.newClientsCount} type="number" icon={<Users />} privacyMode={isPrivacyMode} />
@@ -614,13 +589,11 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                         {/* Origin Chart */}
                          <div className="lg:col-span-8 glass-panel p-8 rounded-[40px] shadow-xl">
                              <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2"><PieChart size={16}/> Origem dos Clientes</h3>
                              <OriginPieChart data={growthMetrics.originData} privacyMode={isPrivacyMode} />
                          </div>
                          
-                         {/* Simulator & Calculator (Tools) */}
                          <div className="lg:col-span-4 flex flex-col gap-8">
                             <ProLaboreCalculator 
                                 grossRevenue={rawView?.grossRevenue || 0}
@@ -635,13 +608,10 @@ const App: React.FC = () => {
                             />
                          </div>
                     </div>
-                    
-                    {/* Full Width Markup Calculator */}
                     <MarkupCalculator />
                 </div>
             )}
 
-            {/* CONSOLIDATED TAB: CONTRACTS & LTV */}
             {activeTab === 'contracts_ltv' && (
               <div className="space-y-8">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -649,7 +619,6 @@ const App: React.FC = () => {
                     <KPICard title="Ticket Médio" value={rawView?.grossRevenue / Math.max(currentView.clients.filter(c => c.Status_Cliente === 'Ativo').length, 1)} icon={<DollarSign />} privacyMode={isPrivacyMode} />
                  </div>
 
-                 {/* Real vs Ideal Chart */}
                  <div className="glass-panel p-8 rounded-[40px] border-none shadow-xl">
                   <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <Target size={18} className="text-indigo-600"/> Potencial de Receita (Real vs Ideal)
@@ -662,7 +631,6 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Contracts Table */}
                 <div className="glass-panel rounded-[40px] overflow-hidden border-none shadow-xl">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -685,6 +653,8 @@ const App: React.FC = () => {
                                 <div className="flex gap-2 items-center mt-1">
                                     <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">{c.Origem || 'Indicação'}</span>
                                     {c.Status_Cliente === 'Inativo' && <span className="text-[9px] bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full font-bold uppercase">Inativo</span>}
+                                    {/* Exibir BADGE se for UI-Z */}
+                                    {c.Tipo_Servico === 'UI-Z' && <span className="text-[9px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold uppercase">UI-Z</span>}
                                 </div>
                               </td>
                               <td className="px-6 py-6">
@@ -727,10 +697,8 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* CONSOLIDATED TAB: FIN & OPS */}
             {activeTab === 'fin_ops' && (
               <div className="space-y-8">
-                 {/* Operational Overview */}
                 <div className="glass-panel rounded-[40px] overflow-hidden border-none shadow-xl">
                     <div className="bg-slate-50 px-8 py-4 border-b border-slate-100 flex justify-between items-center">
                         <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Resumo Operacional & Financeiro</h3>
@@ -767,7 +735,6 @@ const App: React.FC = () => {
                   </table>
                 </div>
 
-                {/* Costs Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-2 glass-panel rounded-[40px] overflow-hidden border-none shadow-xl">
                     <div className="bg-slate-50 px-8 py-4 border-b border-slate-100">
@@ -860,6 +827,7 @@ const SplashScreen = () => (
     <div className="text-center animate-pulse">
       <div className="h-20 w-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white font-black text-5xl mx-auto mb-6 shadow-2xl shadow-indigo-500/50">Z</div>
       <p className="text-slate-500 font-bold uppercase tracking-[0.5em] text-[10px]">Iniciando Engine Financeiro</p>
+      <p className="text-emerald-500 font-bold text-[8px] mt-2 tracking-widest opacity-80">CONNECTED TO SUPABASE</p>
     </div>
   </div>
 );
