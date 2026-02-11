@@ -1,8 +1,7 @@
-
 // --- ENTIDADES NORMALIZADAS (Database Structure) ---
 
 export interface ClientContract {
-  id: string; // ID único do Contrato (ex: 'contract-1')
+  id: string; // Agora é UUID do Supabase
   Cliente: string;
   Status_Contrato: 'Ativo' | 'Inativo';
   Data_Inicio?: string; // YYYY-MM-DD
@@ -11,10 +10,15 @@ export interface ClientContract {
   Descricao_Servico?: string;
   Valor_Sugerido_Renovacao?: number;
   Origem?: 'Indicação' | 'Ads' | 'Outbound' | 'Orgânico' | 'Parceria' | 'Outros';
+
+  // --- NOVOS CAMPOS (UI-Z & SUPABASE) ---
+  Tipo_Servico?: 'Agency' | 'UI-Z'; // Diferencia contrato normal do produto de assinatura
+  UIZ_Setup_Fee?: number; // Taxa de setup (ex: 99,90)
+  UIZ_Valor_Mensal?: number; // Valor da assinatura mensal (flexível)
 }
 
 export interface ClientMonthlyResult {
-  id: string; // ID único do Registro Mensal (ex: 'monthly-1-jan')
+  id: string; // ID único do Registro Mensal (UUID do Supabase)
   contractId: string; // Foreign Key para ClientContract
   Mes_Referencia: string;
   Receita_Mensal_BRL: number;
@@ -33,12 +37,12 @@ export interface MonthlyGrowthData {
 
 // --- VIEWS (UI Consumption) ---
 
-// ClientData agora é uma "View" (Join) de Contract + MonthlyResult
+// ClientData é uma "View" (Join) de Contract + MonthlyResult usada pelos componentes
 export interface ClientData extends ClientContract, Omit<ClientMonthlyResult, 'id' | 'contractId'> {
-  id: string; // ID do MonthlyResult (para chaves de lista)
+  id: string; // ID do MonthlyResult (para chaves de lista no React)
   contractId: string; // ID do Contrato
   
-  // Campos calculados pela Engine
+  // Campos calculados pela Engine Financeira
   Receita_Liquida_Apos_Imposto_BRL: number;
   profit?: number;
   netRevenue?: number;
@@ -55,7 +59,7 @@ export interface CostData {
   Mes_Referencia: string;
   Valor_Mensal_BRL: number;
   Ativo_no_Mes: boolean;
-  // Categorização Estrita (Adeus Strings Mágicas)
+  // Categorização Estrita
   Categoria: 'Operacional' | 'Administrativo' | 'Impostos' | 'Outros'; 
   Tipo?: 'Fixo' | 'Variável' | 'Extraordinário';
 }
@@ -77,7 +81,7 @@ export interface GlobalSettings {
   tolerancePercentage: number;
   oneTimeAdjustments: number;
   manualCostPerContentOverride: number;
-  benchmarks: MarketBenchmarks; // Nova configuração de mercado
+  benchmarks: MarketBenchmarks;
 }
 
 export interface FilterState {
