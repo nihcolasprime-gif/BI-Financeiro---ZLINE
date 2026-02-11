@@ -2,7 +2,7 @@ import { supabase } from './lib/supabase';
 import { ClientContract, ClientMonthlyResult, CostData, GlobalSettings, MonthlyGrowthData } from './types';
 import { INITIAL_CONTRACTS, INITIAL_MONTHLY_RESULTS, ALL_COSTS, INITIAL_GROWTH_DATA } from './constants';
 
-// --- FUNÇÕES DE TRADUÇÃO (DB -> APP) ---
+// --- TRADUTORES: DO BANCO PARA O APP (READ) ---
 
 const mapContractFromDB = (data: any): ClientContract => ({
   id: data.id,
@@ -41,79 +41,156 @@ const mapCostFromDB = (data: any): CostData => ({
   Tipo: data.type
 });
 
-// --- FUNÇÕES DE BUSCA (FETCH) ---
+// --- TRADUTORES: DO APP PARA O BANCO (WRITE) ---
+
+const mapContractToDB = (c: ClientContract) => ({
+  id: c.id.length < 10 ? undefined : c.id, // Se for ID temporário curto, deixa undefined pro banco criar UUID
+  client_name: c.Cliente,
+  status: c.Status_Contrato,
+  start_date: c.Data_Inicio,
+  renewal_date: c.Data_Renovacao,
+  payment_day: c.Dia_Pagamento,
+  service_description: c.Descricao_Servico,
+  suggested_renewal_value: c.Valor_Sugerido_Renovacao,
+  origin: c.Origem,
+  service_type: c.Tipo_Servico || 'Agency',
+  uiz_setup_fee: c.UIZ_Setup_Fee || 0,
+  uiz_monthly_price: c.UIZ_Valor_Mensal || 0
+});
+
+const mapResultToDB = (r: ClientMonthlyResult) => ({
+  id: r.id.includes('temp') ? undefined : r.id,
+  contract_id: r.contractId,
+  reference_month: r.Mes_Referencia,
+  revenue: r.Receita_Mensal_BRL,
+  contracted_content: r.Conteudos_Contratados,
+  delivered_content: r.Conteudos_Entregues,
+  not_delivered_content: r.Conteudos_Nao_Entregues,
+  status: r.Status_Mensal,
+  details: r.Status_Detalhe
+});
+
+const mapCostToDB = (c: CostData) => ({
+  id: c.id.includes('temp') ? undefined : c.id,
+  description: c.Tipo_Custo,
+  reference_month: c.Mes_Referencia,
+  amount: c.Valor_Mensal_BRL,
+  is_active: c.Ativo_no_Mes,
+  category: c.Categoria,
+  type: c.Tipo
+});
+
+// --- FUNÇÕES DE LEITURA (FETCH) ---
 
 export const fetchDashboardData = async () => {
-  console.log("🔄 Iniciando sincronização com Supabase...");
-
+  console.log("🔄 Sincronizando dados...");
   try {
-    // 1. Buscar Contratos
-    const { data: contractsData, error: contractsError } = await supabase
-      .from('contracts')
-      .select('*');
-    
-    if (contractsError) throw contractsError;
+    const [contracts, results, costs, settings, growth] = await Promise.all([
+      supabase.from('contracts').select('*'),
+      supabase.from('monthly_results').select('*'),
+      supabase.from('costs').select('*'),
+      supabase.from('global_settings').select('*').limit(1).single(),
+      supabase.from('growth_metrics').select('*')
+    ]);
 
-    // 2. Buscar Resultados Mensais
-    const { data: resultsData, error: resultsError } = await supabase
-      .from('monthly_results')
-      .select('*');
+    if (contracts.error) throw contracts.error;
 
-    if (resultsError) throw resultsError;
-
-    // 3. Buscar Custos
-    const { data: costsData, error: costsError } = await supabase
-      .from('costs')
-      .select('*');
-
-    if (costsError) throw costsError;
-
-    // 4. Buscar Configurações Globais
-    const { data: settingsData, error: settingsError } = await supabase
-      .from('global_settings')
-      .select('*')
-      .limit(1)
-      .single();
-
-    // Se não tiver settings no banco, não é erro crítico, usamos o padrão.
-    if (settingsError && settingsError.code !== 'PGRST116') {
-        console.warn("Aviso ao buscar settings:", settingsError.message);
-    }
-
-    // 5. Buscar Growth Data
-    const { data: growthData, error: growthError } = await supabase
-      .from('growth_metrics')
-      .select('*');
-    
-    if (growthError) throw growthError;
-
-    // --- RETORNO TRADUZIDO ---
-    // Se o banco estiver vazio (array vazio), retornamos os dados INICIAIS (demo) 
-    // para você não ver uma tela em branco na primeira vez.
-    
     return {
-      contracts: contractsData && contractsData.length > 0 
-        ? contractsData.map(mapContractFromDB) 
-        : INITIAL_CONTRACTS, // Fallback para dados de teste se DB vazio
-
-      monthlyResults: resultsData && resultsData.length > 0 
-        ? resultsData.map(mapResultFromDB) 
-        : INITIAL_MONTHLY_RESULTS,
-
-      costs: costsData && costsData.length > 0 
-        ? costsData.map(mapCostFromDB) 
-        : ALL_COSTS,
-
-      settings: settingsData?.settings_json || null, // Se null, o App usa o default
-
-      growthData: growthData && growthData.length > 0
-        ? growthData.map((d: any) => ({ month: d.reference_month, adSpend: d.ad_spend, leads: d.leads }))
+      contracts: contracts.data?.length ? contracts.data.map(mapContractFromDB) : INITIAL_CONTRACTS,
+      monthlyResults: results.data?.length ? results.data.map(mapResultFromDB) : INITIAL_MONTHLY_RESULTS,
+      costs: costs.data?.length ? costs.data.map(mapCostFromDB) : ALL_COSTS,
+      settings: settings.data?.settings_json || null,
+      growthData: growth.data?.length 
+        ? growth.data.map((d: any) => ({ month: d.reference_month, adSpend: d.ad_spend, leads: d.leads })) 
         : INITIAL_GROWTH_DATA
     };
-
   } catch (error) {
-    console.error("❌ Erro fatal ao buscar dados:", error);
-    // Em caso de erro, retornamos NULL para o App saber que falhou
+    console.error("❌ Erro ao buscar dados:", error);
     return null;
   }
+};
+
+// --- FUNÇÕES DE ESCRITA (WRITE) ---
+
+// 1. Contratos
+export const upsertContract = async (contract: ClientContract) => {
+  const payload = mapContractToDB(contract);
+  // Se não tiver ID (novo), remove o campo ID pro Supabase gerar
+  if (!payload.id) delete payload.id; 
+
+  const { data, error } = await supabase
+    .from('contracts')
+    .upsert(payload)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Erro ao salvar contrato:", error);
+    throw error;
+  }
+  return mapContractFromDB(data);
+};
+
+export const deleteContract = async (id: string) => {
+  const { error } = await supabase.from('contracts').delete().eq('id', id);
+  if (error) throw error;
+};
+
+// 2. Resultados Mensais
+export const upsertMonthlyResult = async (result: ClientMonthlyResult) => {
+  const payload = mapResultToDB(result);
+  if (!payload.id) delete payload.id;
+
+  const { data, error } = await supabase
+    .from('monthly_results')
+    .upsert(payload)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapResultFromDB(data);
+};
+
+// 3. Custos
+export const upsertCost = async (cost: CostData) => {
+  const payload = mapCostToDB(cost);
+  if (!payload.id) delete payload.id;
+
+  const { data, error } = await supabase
+    .from('costs')
+    .upsert(payload)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapCostFromDB(data);
+};
+
+export const deleteCost = async (id: string) => {
+  const { error } = await supabase.from('costs').delete().eq('id', id);
+  if (error) throw error;
+};
+
+// 4. Configurações
+export const saveSettings = async (settings: GlobalSettings) => {
+  // Busca se já existe ID 1 (ou cria estratégia de singleton)
+  // Como simplificamos, vamos buscar qualquer um, se não tiver cria.
+  const { data: existing } = await supabase.from('global_settings').select('id').limit(1).single();
+  
+  const payload = {
+    settings_json: settings,
+    id: existing?.id // Se existir, atualiza ele.
+  };
+
+  const { error } = await supabase.from('global_settings').upsert(payload);
+  if (error) console.error("Erro ao salvar settings:", error);
+};
+
+// 5. Growth Data
+export const saveGrowthData = async (month: string, adSpend: number) => {
+  const { error } = await supabase
+    .from('growth_metrics')
+    .upsert({ reference_month: month, ad_spend: adSpend }, { onConflict: 'reference_month' });
+  
+  if (error) console.error("Erro growth:", error);
 };
