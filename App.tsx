@@ -1,835 +1,253 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  LayoutDashboard, DollarSign, Activity, History, Users, TrendingDown,
-  Trophy, Eye, EyeOff, Settings, AlertCircle, Search, X, 
-  FileText, Calendar, Clock, ArrowUpRight, TrendingUp, Filter, Target, Repeat, BarChart3, Rocket, Wrench, Briefcase, Calculator, PieChart, Layers, RotateCcw, Wallet, ArrowRight, Check
+  LayoutDashboard, Lock, Unlock, TrendingUp, DollarSign, 
+  Wallet, PieChart, AlertCircle, Calendar 
 } from 'lucide-react';
-import { STANDARD_MONTHS } from './constants'; // Removemos imports de INITIAL_DATA pois vêm do DB agora
-import KPICard from './components/KPICard';
-import { ConfigurationsPanel } from './components/ConfigurationsPanel';
+
+// Tipos e Constantes
 import { 
-  ProfitLossChart, TrendChart, ScatterRevContent, RealVsIdealChart, CostsPieChart, OriginPieChart 
-} from './components/Charts';
-import { formatCurrency, formatPercent, sortMonths, getMonthComparableValue } from './utils';
-import { ClientData, CostData, GlobalSettings, ClientContract, ClientMonthlyResult, MonthlyGrowthData } from './types';
+  ClientContract, ClientMonthlyResult, CostData, 
+  GlobalSettings, MonthlyGrowthData 
+} from './types';
+import { MONTHS, INITIAL_CONTRACTS, INITIAL_MONTHLY_RESULTS, ALL_COSTS, INITIAL_GROWTH_DATA } from './constants';
 import { calculateSimulation } from './utils/configAudit';
 
-// --- IMPORTAÇÃO DO CÉREBRO NOVO ---
+// Banco de Dados
 import { fetchDashboardData } from './database';
 
-type TabType = 'executive' | 'growth_tools' | 'contracts_ltv' | 'fin_ops' | 'annual' | 'settings';
-type StatusFilterType = 'Todos' | 'Ativo' | 'Inativo';
+// Componentes
+import KPICard from './components/KPICard';
+import { FinancialCharts } from './components/Charts';
+import { ConfigurationsPanel } from './components/ConfigurationsPanel';
 
-// Sub-components (Calculators) mantidos iguais
-const ProLaboreCalculator = ({ grossRevenue, currentProfit, costs, taxRate }: { grossRevenue: number, currentProfit: number, costs: CostData[], taxRate: number }) => {
-    const [partners, setPartners] = useState(1);
-    const [roleLevel, setRoleLevel] = useState<'operacional' | 'estrategico'>('operacional');
-    
-    const currentProLaboreTotal = useMemo(() => {
-        if (!costs || costs.length === 0) return 0;
-        return costs
-            .filter(c => {
-                const name = c.Tipo_Custo.toLowerCase();
-                return (name.includes('pro-labore') || name.includes('pro labore') || name.includes('sócio') || name.includes('socio')) && c.Ativo_no_Mes;
-            })
-            .reduce((acc, curr) => acc + curr.Valor_Mensal_BRL, 0);
-    }, [costs]);
+function App() {
+  // --- ESTADOS GLOBAIS ---
+  const [loading, setLoading] = useState(true);
+  const [privacyMode, setPrivacyMode] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[0]); // Pega o mês mais recente
+  const [availableMonths, setAvailableMonths] = useState<string[]>(MONTHS);
 
-    const marketPercent = useMemo(() => {
-        if (roleLevel === 'operacional') return { min: 0.15, max: 0.25, ideal: 0.20 };
-        return { min: 0.10, max: 0.15, ideal: 0.12 };
-    }, [roleLevel]);
-
-    const suggestedTotal = grossRevenue * marketPercent.ideal;
-    const cashImpact = currentProLaboreTotal - suggestedTotal;
-    const newProfit = currentProfit + cashImpact; 
-    
-    const netRevenue = grossRevenue * (1 - taxRate);
-    const currentMargin = netRevenue > 0 ? currentProfit / netRevenue : 0;
-    const newMargin = netRevenue > 0 ? newProfit / netRevenue : 0;
-
-    return (
-        <div className="glass-panel p-6 rounded-[32px] shadow-xl h-full flex flex-col bg-white">
-            <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                    <Wallet size={18} className="text-emerald-600"/> Análise de Pro-Labore
-                </h3>
-                <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-lg">Dados Reais</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                     <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Atual (Lançado)</p>
-                     <p className="text-lg font-black text-slate-800">{formatCurrency(currentProLaboreTotal)}</p>
-                     {currentProLaboreTotal === 0 && <p className="text-[9px] text-rose-500 font-bold mt-1">Não identificado nos custos</p>}
-                </div>
-                <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
-                     <p className="text-[10px] font-black text-emerald-600 uppercase mb-1">Sugerido ({formatPercent(marketPercent.ideal)})</p>
-                     <p className="text-lg font-black text-emerald-800">{formatCurrency(suggestedTotal)}</p>
-                </div>
-            </div>
-
-            <div className="space-y-4 mb-6">
-                <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Perfil dos Sócios</label>
-                    <div className="grid grid-cols-2 gap-2">
-                         <button 
-                            onClick={() => setRoleLevel('operacional')}
-                            className={`p-2 rounded-xl text-xs font-bold transition-all border ${roleLevel === 'operacional' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'}`}
-                         >
-                            Operacional
-                         </button>
-                         <button 
-                            onClick={() => setRoleLevel('estrategico')}
-                            className={`p-2 rounded-xl text-xs font-bold transition-all border ${roleLevel === 'estrategico' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'}`}
-                         >
-                            Estratégico
-                         </button>
-                    </div>
-                </div>
-            </div>
-
-            <div className="mt-auto bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                <p className="text-[10px] font-black text-slate-400 uppercase mb-3 flex items-center gap-1">
-                    <Activity size={12} /> Impacto no Resultado Líquido
-                </p>
-                
-                <div className="space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 font-bold">Margem Atual:</span>
-                        <span className={`font-black ${currentMargin < 0 ? 'text-rose-500' : 'text-slate-700'}`}>{formatPercent(currentMargin)}</span>
-                    </div>
-                    
-                    <div className="h-px bg-slate-200 w-full my-1"></div>
-
-                    <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 font-bold">Nova Margem (Simulada):</span>
-                        <div className="text-right">
-                             <span className={`font-black ${newMargin < 0.1 ? 'text-rose-600' : 'text-emerald-600'}`}>{formatPercent(newMargin)}</span>
-                             <span className="text-[9px] text-slate-400 block">
-                                {newProfit > currentProfit ? 'Aumento de Lucro' : 'Redução de Lucro'}
-                             </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    )
-}
-
-const MarkupCalculator = () => {
-    const [custoHora, setCustoHora] = useState(50);
-    const [horas, setHoras] = useState(10);
-    const [imposto, setImposto] = useState(10); 
-    const [margemAlvo, setMargemAlvo] = useState(20); 
-    const [custosExtras, setCustosExtras] = useState(0);
-
-    const custoBase = (custoHora * horas) + custosExtras;
-    const divisor = 1 - ((imposto + margemAlvo) / 100);
-    const precoSugerido = divisor > 0 ? custoBase / divisor : 0;
-    const lucroBruto = precoSugerido - custoBase - (precoSugerido * (imposto / 100));
-
-    return (
-        <div className="glass-panel p-6 rounded-[32px] shadow-xl h-full flex flex-col bg-white">
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                <Calculator size={18} className="text-indigo-600"/> Calculadora de Markup
-            </h3>
-            <div className="space-y-4 flex-1">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Custo Hora</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 text-xs text-slate-400">R$</span>
-                        <input type="number" value={custoHora} onChange={e => setCustoHora(parseFloat(e.target.value) || 0)} className="w-full pl-8 p-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
-                      </div>
-                  </div>
-                  <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Horas</label>
-                      <input type="number" value={horas} onChange={e => setHoras(parseFloat(e.target.value) || 0)} className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
-                  </div>
-                </div>
-                 <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Custos Extras</label>
-                    <input type="number" value={custosExtras} onChange={e => setCustosExtras(parseFloat(e.target.value) || 0)} className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Imposto (%)</label>
-                        <input type="number" value={imposto} onChange={e => setImposto(parseFloat(e.target.value) || 0)} className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Margem (%)</label>
-                        <input type="number" value={margemAlvo} onChange={e => setMargemAlvo(parseFloat(e.target.value) || 0)} className="w-full p-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-sm outline-none" />
-                    </div>
-                </div>
-            </div>
-            
-            <div className="mt-6 bg-slate-900 rounded-2xl p-4 text-white">
-                <div className="flex justify-between items-end mb-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Preço Final</span>
-                    <span className="text-2xl font-black text-indigo-400">{formatCurrency(precoSugerido)}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-700">
-                    <span className="text-slate-400">Lucro Líquido:</span>
-                    <span className="text-emerald-400 font-bold">{formatCurrency(lucroBruto)}</span>
-                </div>
-            </div>
-        </div>
-    )
-}
-
-const ScenarioSimulator = ({ currentNetResult, currentRevenue, currentCost }: { currentNetResult: number, currentRevenue: number, currentCost: number }) => {
-    const [priceVar, setPriceVar] = useState(0);
-    const [costVar, setCostVar] = useState(0);
-    const [churnVar, setChurnVar] = useState(0);
-
-    const handleReset = () => {
-        setPriceVar(0);
-        setCostVar(0);
-        setChurnVar(0);
-    };
-
-    const simulatedRevenue = currentRevenue * (1 + (priceVar / 100)) * (1 - (churnVar / 100));
-    const simulatedCost = currentCost * (1 + (costVar / 100));
-    const simulatedResult = simulatedRevenue - simulatedCost;
-    const variation = simulatedResult - currentNetResult;
-    const cleanVariation = Math.abs(variation) < 0.01 ? 0 : variation;
-
-    return (
-        <div className="glass-panel p-6 rounded-[32px] shadow-xl h-full flex flex-col bg-white">
-            <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                    <Activity size={18} className="text-emerald-600"/> Cenários Futuros
-                </h3>
-                {(priceVar !== 0 || costVar !== 0 || churnVar !== 0) && (
-                    <button onClick={handleReset} className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-slate-600 bg-slate-100 px-2 py-1 rounded-lg transition-all">
-                        <RotateCcw size={10} /> Reset
-                    </button>
-                )}
-            </div>
-            
-            <div className="space-y-5 mb-6">
-                <div>
-                     <div className="flex justify-between mb-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Preço / Ticket</label>
-                        <span className={`text-[10px] font-black ${priceVar > 0 ? 'text-emerald-600' : 'text-slate-600'}`}>{priceVar > 0 ? '+' : ''}{priceVar}%</span>
-                     </div>
-                     <input type="range" min="-20" max="50" value={priceVar} onChange={e => setPriceVar(parseInt(e.target.value))} className="w-full accent-indigo-600 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer" />
-                </div>
-                <div>
-                     <div className="flex justify-between mb-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Custos Operacionais</label>
-                        <span className={`text-[10px] font-black ${costVar > 0 ? 'text-rose-600' : 'text-slate-600'}`}>{costVar > 0 ? '+' : ''}{costVar}%</span>
-                     </div>
-                     <input type="range" min="-20" max="50" value={costVar} onChange={e => setCostVar(parseInt(e.target.value))} className="w-full accent-rose-500 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer" />
-                </div>
-                 <div>
-                     <div className="flex justify-between mb-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Churn (Perda)</label>
-                        <span className="text-[10px] font-black text-slate-600">{churnVar}%</span>
-                     </div>
-                     <input type="range" min="0" max="50" value={churnVar} onChange={e => setChurnVar(parseInt(e.target.value))} className="w-full accent-slate-400 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer" />
-                </div>
-            </div>
-
-            <div className="mt-auto bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                <div className="flex justify-between items-center mb-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Resultado Simulado</p>
-                    <p className={`text-sm font-black ${simulatedResult >= 0 ? 'text-slate-800' : 'text-rose-600'}`}>{formatCurrency(simulatedResult)}</p>
-                </div>
-                <div className="flex justify-between items-center">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Variação</p>
-                    <p className={`text-xs font-black ${cleanVariation >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {cleanVariation > 0 ? '+' : ''}{formatCurrency(cleanVariation)}
-                    </p>
-                </div>
-            </div>
-        </div>
-    )
-}
-
-const App: React.FC = () => {
-  const [showSplash, setShowSplash] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>('executive');
-  const [isPrivacyMode, setIsPrivacyMode] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilterType>('Todos');
-  
-  // --- STATE GERENCIADO PELO DB ---
-  // Inicializamos vazio pois vamos buscar do Supabase
+  // Dados do Sistema
   const [contracts, setContracts] = useState<ClientContract[]>([]);
   const [monthlyResults, setMonthlyResults] = useState<ClientMonthlyResult[]>([]);
-  const [allCosts, setAllCosts] = useState<CostData[]>([]);
-  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [costs, setCosts] = useState<CostData[]>([]);
   const [growthData, setGrowthData] = useState<MonthlyGrowthData[]>([]);
-  
-  // Settings com Default seguro
   const [settings, setSettings] = useState<GlobalSettings>({
-      taxRate: 0.10,
-      targetMargin: 0.20,
-      maxProductionCapacity: 140,
-      allocationMethod: 'perDelivered',
-      inflationFactor: 1,
-      seasonalMultiplier: 1,
-      tolerancePercentage: 0.05,
-      oneTimeAdjustments: 0,
-      manualCostPerContentOverride: 0,
-      benchmarks: {
-        maxChurn: 0.05,
-        minMargin: 0.20,
-        minLtvCac: 3.0,
-        safeCapacityLimit: 0.85
-      }
+    taxRate: 0.10, // 10% Padrão
+    targetMargin: 0.50, // 50% Margem
+    maxProductionCapacity: 40,
+    benchmarks: { maxChurn: 0.05, minMargin: 0.30, minLtvCac: 3 }
   });
 
-  const [selectedMonth, setSelectedMonth] = useState<string>('');
-
-  // --- EFEITO DE CARREGAMENTO (INIT) ---
+  // --- 1. CARREGAMENTO INICIAL (SUPABASE) ---
   useEffect(() => {
-    async function loadData() {
-      // setShowSplash(true); // Mantém o splash enquanto carrega
-      const data = await fetchDashboardData();
+    const loadData = async () => {
+      const dbData = await fetchDashboardData();
       
-      if (data) {
-        setContracts(data.contracts);
-        setMonthlyResults(data.monthlyResults);
-        setAllCosts(data.costs);
-        
-        // Se houver settings salvas, usamos. Se não, mantemos o default
-        if (data.settings) {
-          setSettings(prev => ({ ...prev, ...data.settings, benchmarks: { ...prev.benchmarks, ...(data.settings.benchmarks || {}) } }));
-        }
-
-        setGrowthData(data.growthData);
-
-        // Lógica para definir meses disponíveis baseados nos dados
-        // Extraímos todos os meses únicos dos resultados e custos
-        const monthsFromResults = new Set(data.monthlyResults.map(r => r.Mes_Referencia));
-        const monthsFromCosts = new Set(data.costs.map(c => c.Mes_Referencia));
-        const uniqueMonths = Array.from(new Set([...monthsFromResults, ...monthsFromCosts]));
-        
-        // Se o DB estiver vazio, usamos uma lista padrão para não quebrar a UI
-        const finalMonths = uniqueMonths.length > 0 ? uniqueMonths : ['Fev/2026', 'Jan/2026', 'Dez/2025'];
-        setAvailableMonths(finalMonths);
+      if (dbData) {
+        // Se o banco retornou algo, usa. Se vier vazio [], usa vazio mesmo.
+        setContracts(dbData.contracts);
+        setMonthlyResults(dbData.monthlyResults);
+        setCosts(dbData.costs);
+        if (dbData.settings) setSettings(dbData.settings);
+        setGrowthData(dbData.growthData);
+      } else {
+        // Fallback de segurança (muito raro cair aqui se o .env estiver certo)
+        console.warn("Usando fallback local (Falha na conexão)");
+        setContracts(INITIAL_CONTRACTS);
+        setMonthlyResults(INITIAL_MONTHLY_RESULTS);
+        setCosts(ALL_COSTS);
+        setGrowthData(INITIAL_GROWTH_DATA);
       }
-
-      // Pequeno delay para transição suave do splash
-      setTimeout(() => setShowSplash(false), 800);
-    }
+      setLoading(false);
+    };
 
     loadData();
   }, []);
 
-  // Stable Sorted Months
-  const sortedMonths = useMemo(() => sortMonths(availableMonths), [availableMonths]);
-  
-  // Reverse sorted for UX (Dropdown)
-  const dropdownMonths = useMemo(() => [...sortedMonths].reverse(), [sortedMonths]);
+  // --- 2. CÁLCULOS EM TEMPO REAL ---
 
-  // Initialize selectedMonth safely after availableMonths is loaded
-  useEffect(() => {
-    if (!selectedMonth && dropdownMonths.length > 0) {
-      setSelectedMonth(dropdownMonths[0]); // Select newest month default
-    } else if (sortedMonths.length > 0 && !sortedMonths.includes(selectedMonth)) {
-      setSelectedMonth(dropdownMonths[0]);
-    }
-  }, [dropdownMonths, selectedMonth, sortedMonths]);
+  // A. Simulação do Mês Selecionado (Para os Cards do Topo)
+  const currentSimulation = useMemo(() => {
+    return calculateSimulation(
+      selectedMonth,
+      contracts,
+      monthlyResults,
+      costs,
+      settings,
+      [] // Futuro: passar resultados anteriores para cálculo de churn exato
+    );
+  }, [selectedMonth, contracts, monthlyResults, costs, settings]);
 
-  const handleMonthSwitch = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const targetMonth = e.target.value;
-    if (availableMonths.includes(targetMonth)) {
-      setSelectedMonth(targetMonth);
-    }
-  }, [availableMonths]);
+  // B. Histórico Financeiro Completo (Para os Gráficos)
+  const financialHistory = useMemo(() => {
+    // Vamos calcular mês a mês para plotar o gráfico de evolução
+    // Revertemos MONTHS para ficar cronológico (Jan -> Dez) no gráfico
+    const cronologicalMonths = [...MONTHS].reverse(); 
 
-  // --- REMOVIDO: useEffect de salvar no localStorage ---
-  // Agora a persistência será via funções de Save no Supabase (Próximo Passo)
-
-  // --- ENGINE INTEGRATION (Mantido igual) ---
-  const brain = useMemo(() => {
-    const resultsByMonth = new Map<string, ClientMonthlyResult[]>();
-    monthlyResults.forEach(r => {
-      if (!resultsByMonth.has(r.Mes_Referencia)) {
-        resultsByMonth.set(r.Mes_Referencia, []);
-      }
-      resultsByMonth.get(r.Mes_Referencia)?.push(r);
-    });
-
-    const monthlyMetrics = sortedMonths.map((month, idx) => {
-      const previousMonth = idx > 0 ? sortedMonths[idx - 1] : null;
-      const prevResults = previousMonth ? (resultsByMonth.get(previousMonth) || []) : [];
+    return cronologicalMonths.map(month => {
+      const sim = calculateSimulation(month, contracts, monthlyResults, costs, settings, []);
       
-      const result = calculateSimulation(month, contracts, monthlyResults, allCosts, settings, prevResults);
+      // AQUI ESTÁ O PULO DO GATO: SEPARAR UI-Z DE AGÊNCIA
+      let uizRevenue = 0;
+      let agencyRevenue = 0;
 
-      return {
-        month,
-        ...result.kpis,
-        clients: result.clients,
-        costs: result.costs
-      };
-    });
-
-    let totalDurationMonths = 0;
-    const activeContracts = contracts.filter(c => c.Status_Contrato === 'Ativo');
-    const now = new Date();
-    
-    activeContracts.forEach(c => {
-      if (c.Data_Inicio) {
-        const start = new Date(c.Data_Inicio);
-        if (!isNaN(start.getTime())) {
-             if (start > now) return;
-             const monthsDiff = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
-             totalDurationMonths += Math.max(1, monthsDiff + 1);
+      sim.clients.forEach(client => {
+        // Receita considerada para o gráfico (Realizada se tiver, Projetada se não)
+        const revenue = client.Receita_Mensal_BRL || 0;
+        
+        if (client.Tipo_Servico === 'UI-Z') {
+          uizRevenue += revenue;
+        } else {
+          agencyRevenue += revenue;
         }
-      }
-    });
-
-    const avgRetentionMonths = activeContracts.length > 0 ? totalDurationMonths / activeContracts.length : 0;
-
-    return { months: sortedMonths, monthlyMetrics, avgRetentionMonths };
-  }, [contracts, monthlyResults, allCosts, sortedMonths, settings]);
-
-  const rawView = useMemo(() => {
-    return brain.monthlyMetrics.find(m => m.month === selectedMonth) || brain.monthlyMetrics[brain.monthlyMetrics.length - 1];
-  }, [brain, selectedMonth]);
-
-  const currentView = useMemo(() => {
-    if (!rawView) return null;
-    
-    let filteredClients = rawView.clients;
-    if (statusFilter !== 'Todos') {
-      filteredClients = filteredClients.filter(c => c.Status_Cliente === statusFilter);
-    }
-
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      filteredClients = filteredClients.filter(c => 
-        c.Cliente.toLowerCase().includes(term) || 
-        (c.Descricao_Servico && c.Descricao_Servico.toLowerCase().includes(term))
-      );
-    }
-
-    return {
-      ...rawView,
-      clients: filteredClients,
-      costs: searchTerm.trim() ? rawView.costs.filter(c => c.Tipo_Custo.toLowerCase().includes(searchTerm.toLowerCase())) : rawView.costs
-    };
-  }, [rawView, searchTerm, statusFilter]);
-
-  // --- GROWTH METRICS CALCULATION ---
-  const growthMetrics = useMemo(() => {
-      if (!currentView) return null;
-      
-      const currentGrowthData = growthData.find(g => g.month === selectedMonth) || { adSpend: 0 };
-      
-      const currentMonthComparable = getMonthComparableValue(selectedMonth);
-      const newClientsCount = contracts.filter(c => {
-          if (!c.Data_Inicio) return false;
-          const startDate = new Date(c.Data_Inicio);
-          const startMonthName = STANDARD_MONTHS[startDate.getMonth()];
-          const startYear = startDate.getFullYear();
-          const startMonthComparable = getMonthComparableValue(`${startMonthName}/${startYear}`);
-          return startMonthComparable === currentMonthComparable;
-      }).length;
-
-      const cac = newClientsCount > 0 ? currentGrowthData.adSpend / newClientsCount : 0;
-      const avgTicket = currentView.grossRevenue / Math.max(currentView.clients.filter(c => c.Status_Cliente === 'Ativo').length, 1);
-      const ltv = avgTicket * brain.avgRetentionMonths;
-      const ltvCacRatio = cac > 0 ? ltv / cac : 0;
-
-      const originCounts = currentView.clients.reduce((acc, client) => {
-          const origin = client.Origem || 'Indicação';
-          acc[origin] = (acc[origin] || 0) + 1;
-          return acc;
-      }, {} as Record<string, number>);
-
-      const originData = Object.entries(originCounts).map(([name, value]) => ({ name, value }));
+      });
 
       return {
-          adSpend: currentGrowthData.adSpend,
-          newClientsCount,
-          cac,
-          ltv,
-          ltvCacRatio,
-          originData
+        month: month.split('/')[0], // "Jan" em vez de "Jan/2026" pra caber no gráfico
+        fullMonth: month,
+        agencyRevenue,
+        uizRevenue,
+        totalRevenue: sim.kpis.grossRevenue,
+        totalCost: sim.kpis.totalCost,
+        netResult: sim.kpis.netResult,
+        accumulatedCash: sim.kpis.netResult // Simplificado
       };
-  }, [currentView, growthData, selectedMonth, contracts, brain.avgRetentionMonths]);
+    });
+  }, [contracts, monthlyResults, costs, settings]);
 
-  const getDaysUntilRenewal = (dateString?: string) => {
-    if (!dateString) return null;
-    const targetDate = new Date(dateString);
-    if (isNaN(targetDate.getTime())) return null;
-    const diffTime = targetDate.getTime() - new Date().getTime();
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
+  // --- 3. RENDERIZAÇÃO ---
 
-  const handleShortcut = (tab: TabType) => {
-     setActiveTab(tab);
-     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center flex-col gap-4">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">Carregando Z-Line BI...</p>
+      </div>
+    );
+  }
 
-  if (showSplash) return <SplashScreen />;
+  const kpis = currentSimulation.kpis;
+  const margin = kpis.grossRevenue > 0 ? (kpis.netResult / kpis.grossRevenue) : 0;
 
   return (
-    <div className="min-h-screen text-slate-800 selection:bg-indigo-100 flex flex-col">
-      <header className="fixed top-0 w-full z-40 bg-white/70 backdrop-blur-xl border-b border-white/40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center py-4 gap-4">
-            <div className="flex items-center gap-3 shrink-0 self-start md:self-auto">
-              <div className="h-10 w-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-500/20">Z</div>
-              <div className="hidden sm:block">
-                <h1 className="text-xl font-black text-slate-900">BI Growth</h1>
-                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Performance & Intelligence</p>
-              </div>
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 pb-20">
+      
+      {/* HEADER / BARRA DE NAVEGAÇÃO */}
+      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 px-6 py-4 mb-8">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+          
+          <div className="flex items-center gap-3">
+            <div className="bg-slate-900 p-2 rounded-xl">
+              <LayoutDashboard className="text-white" size={20} />
             </div>
-
-            <div className="flex items-center gap-3 w-full md:w-auto">
-                <div className="flex-1 max-w-md relative group">
-                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-600 transition-colors">
-                    <Search size={18} />
-                </div>
-                <input 
-                    type="text" 
-                    placeholder="Buscar..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-slate-100/50 border-none rounded-2xl py-2.5 pl-11 pr-10 text-sm font-bold placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all outline-none"
-                />
-                {searchTerm && (
-                    <button 
-                    onClick={() => setSearchTerm('')}
-                    className="absolute inset-y-0 right-3 flex items-center text-slate-300 hover:text-slate-600 transition-colors"
-                    >
-                    <X size={16} />
-                    </button>
-                )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="bg-white/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/60 shadow-sm hover:shadow-md transition-all group flex items-center gap-2">
-                    <Calendar size={14} className="text-slate-400 group-hover:text-indigo-500 transition-colors" />
-                    <select value={selectedMonth} onChange={handleMonthSwitch} className="bg-transparent text-xs font-black text-slate-700 border-none focus:ring-0 cursor-pointer uppercase tracking-tight outline-none appearance-none">
-                        {dropdownMonths.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="bg-white/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/60 shadow-sm hover:shadow-md transition-all group flex items-center gap-2">
-                    <Filter size={14} className="text-slate-400 group-hover:text-indigo-500 transition-colors" />
-                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilterType)} className="bg-transparent text-xs font-black text-slate-700 border-none focus:ring-0 cursor-pointer uppercase tracking-tight outline-none appearance-none">
-                        <option value="Todos">Todos</option>
-                        <option value="Ativo">Ativos</option>
-                        <option value="Inativo">Inativos</option>
-                    </select>
-                  </div>
-
-                  <button 
-                    onClick={() => setIsPrivacyMode(!isPrivacyMode)} 
-                    className={`p-2.5 rounded-xl border shadow-sm transition-all ${isPrivacyMode ? 'bg-indigo-100 border-indigo-200 text-indigo-600' : 'bg-white/60 backdrop-blur-md border-white/60 text-slate-400 hover:text-slate-600 hover:shadow-md'}`}
-                    title={isPrivacyMode ? "Exibir Valores" : "Ocultar Valores"}
-                  >
-                      {isPrivacyMode ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
+            <div>
+              <h1 className="text-lg font-black tracking-tighter text-slate-900">Z-LINE <span className="text-indigo-600">BI</span></h1>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Financial Intelligence</p>
             </div>
           </div>
 
-          <nav className="flex space-x-2 pb-3 no-scrollbar overflow-x-auto">
-            <TabButton id="executive" label="Dashboard" icon={LayoutDashboard} activeTab={activeTab} onClick={setActiveTab} />
-            <TabButton id="growth_tools" label="Estratégico" icon={Rocket} activeTab={activeTab} onClick={setActiveTab} />
-            <TabButton id="contracts_ltv" label="Contratos" icon={FileText} activeTab={activeTab} onClick={setActiveTab} />
-            <TabButton id="fin_ops" label="Financeiro" icon={DollarSign} activeTab={activeTab} onClick={setActiveTab} />
-            <TabButton id="annual" label="Histórico" icon={History} activeTab={activeTab} onClick={setActiveTab} />
-            <TabButton id="settings" label="Config" icon={Settings} activeTab={activeTab} onClick={setActiveTab} />
-          </nav>
+          <div className="flex items-center gap-3 bg-slate-100 p-1.5 rounded-2xl">
+            <div className="relative group">
+              <select 
+                value={selectedMonth} 
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="appearance-none bg-white pl-4 pr-10 py-2 rounded-xl text-xs font-black uppercase tracking-wide border border-slate-200 shadow-sm outline-none focus:border-indigo-500 cursor-pointer min-w-[140px]"
+              >
+                {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <Calendar size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+            </div>
+
+            <div className="h-6 w-px bg-slate-300 mx-1"></div>
+
+            <button 
+              onClick={() => setPrivacyMode(!privacyMode)}
+              className={`p-2 rounded-xl transition-all ${privacyMode ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-slate-400 hover:text-slate-600 shadow-sm'}`}
+              title="Modo Privacidade"
+            >
+              {privacyMode ? <Lock size={16} /> : <Unlock size={16} />}
+            </button>
+          </div>
+
         </div>
-      </header>
+      </nav>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-48 pb-20 w-full animate-fade-in">
-        {currentView ? (
-          <>
-            {activeTab === 'executive' && (
-              <div className="space-y-8">
-                {/* KPIs Topo */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <KPICard title="Receita Bruta" value={rawView?.grossRevenue || 0} icon={<DollarSign />} privacyMode={isPrivacyMode} onClick={() => handleShortcut('fin_ops')} />
-                  <KPICard title="Churn Rate" value={rawView?.churn || 0} type="percent" colorCondition="alert-low" icon={<TrendingUp />} privacyMode={isPrivacyMode} onClick={() => handleShortcut('contracts_ltv')} />
-                  <KPICard title="Retenção Média (Meses)" value={brain.avgRetentionMonths} type="number" colorCondition="positive-green" icon={<Clock />} privacyMode={isPrivacyMode} onClick={() => handleShortcut('contracts_ltv')} />
-                  <KPICard title="Resultado Líquido" value={rawView?.netResult || 0} colorCondition="positive-green" icon={<Trophy />} privacyMode={isPrivacyMode} onClick={() => handleShortcut('fin_ops')} />
-                </div>
-                
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  <div className="lg:col-span-2 glass-panel p-8 rounded-[40px] border-none shadow-xl">
-                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2"><BarChart3 size={16}/> Performance Financeira</h3>
-                    <ProfitLossChart clients={currentView.clients} privacyMode={isPrivacyMode} />
-                  </div>
-                  <div className="glass-panel p-8 rounded-[40px] border-none shadow-xl flex flex-col justify-center text-center relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">LTV (Lifetime Value)</p>
-                    <div className="text-5xl font-black text-slate-900 mb-2 tracking-tighter">
-                       {isPrivacyMode ? '••••' : formatCurrency((rawView?.grossRevenue / Math.max(currentView.clients.filter(c => c.Status_Cliente === 'Ativo').length, 1)) * brain.avgRetentionMonths)}
-                    </div>
-                    <p className="text-xs text-slate-500 font-bold px-4 leading-relaxed">
-                        Valor total estimado que cada cliente deixa na agência durante todo o contrato.
-                    </p>
-                    <button onClick={() => handleShortcut('growth_tools')} className="mt-6 mx-auto bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-xl text-xs font-black transition-colors">
-                        Ver Estratégia
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {activeTab === 'growth_tools' && growthMetrics && (
-                <div className="space-y-8">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <KPICard title="Investimento (Ads)" value={growthMetrics.adSpend} icon={<Target />} colorCondition="cost-warning" privacyMode={isPrivacyMode} subtitle="Configurado em Ajustes" onClick={() => handleShortcut('settings')} />
-                        <KPICard title="Novos Clientes" value={growthMetrics.newClientsCount} type="number" icon={<Users />} privacyMode={isPrivacyMode} />
-                        <KPICard title="CAC (Custo Aquisição)" value={growthMetrics.cac} colorCondition="always-neutral" icon={<TrendingUp />} privacyMode={isPrivacyMode} />
-                        <KPICard title="Ratio LTV:CAC" value={growthMetrics.ltvCacRatio} type="number" colorCondition="positive-green" icon={<Rocket />} privacyMode={isPrivacyMode} subtitle={growthMetrics.ltvCacRatio > 3 ? "Saudável (>3x)" : "Atenção"} />
-                    </div>
+      <main className="max-w-7xl mx-auto px-6 space-y-8">
+        
+        {/* SEÇÃO 1: CARDS DE KPI */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KPICard 
+            title="Receita Bruta" 
+            value={kpis.grossRevenue} 
+            icon={<DollarSign size={20} />} 
+            privacyMode={privacyMode}
+            colorCondition="always-neutral"
+            subtitle="Faturamento Total Emitido"
+          />
+          <KPICard 
+            title="Receita Líquida" 
+            value={kpis.realizedRevenue} // Mostra o que realmente entrou (Pago)
+            icon={<Wallet size={20} />} 
+            privacyMode={privacyMode}
+            colorCondition="positive-green"
+            subtitle="Caixa Realizado (Pago)"
+          />
+           <KPICard 
+            title="Custos Totais" 
+            value={kpis.totalCost} 
+            icon={<TrendingUp size={20} className="rotate-180"/>} 
+            privacyMode={privacyMode}
+            colorCondition="cost-warning"
+            subtitle={`${costs.length} despesas lançadas`}
+          />
+          <KPICard 
+            title="Margem de Lucro" 
+            value={margin} 
+            type="percent"
+            icon={<PieChart size={20} />} 
+            privacyMode={privacyMode}
+            colorCondition={margin >= settings.targetMargin ? 'positive-green' : 'alert-low'}
+            subtitle={`Meta: ${(settings.targetMargin * 100).toFixed(0)}%`}
+          />
+        </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                         <div className="lg:col-span-8 glass-panel p-8 rounded-[40px] shadow-xl">
-                             <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2"><PieChart size={16}/> Origem dos Clientes</h3>
-                             <OriginPieChart data={growthMetrics.originData} privacyMode={isPrivacyMode} />
-                         </div>
-                         
-                         <div className="lg:col-span-4 flex flex-col gap-8">
-                            <ProLaboreCalculator 
-                                grossRevenue={rawView?.grossRevenue || 0}
-                                currentProfit={rawView?.netResult || 0}
-                                costs={rawView?.costs || []}
-                                taxRate={settings.taxRate}
-                            />
-                            <ScenarioSimulator 
-                                currentNetResult={rawView?.netResult || 0} 
-                                currentRevenue={rawView?.netRevenue || 0}
-                                currentCost={rawView?.totalCost || 0}
-                            />
-                         </div>
-                    </div>
-                    <MarkupCalculator />
-                </div>
-            )}
+        {/* SEÇÃO 2: GRÁFICOS ESTRATÉGICOS */}
+        <FinancialCharts 
+          data={financialHistory} 
+          privacyMode={privacyMode} 
+        />
 
-            {activeTab === 'contracts_ltv' && (
-              <div className="space-y-8">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <KPICard title="LTV Estimado" value={(rawView?.grossRevenue / Math.max(currentView.clients.filter(c => c.Status_Cliente === 'Ativo').length, 1)) * brain.avgRetentionMonths} icon={<Target />} privacyMode={isPrivacyMode} onClick={() => handleShortcut('growth_tools')} />
-                    <KPICard title="Ticket Médio" value={rawView?.grossRevenue / Math.max(currentView.clients.filter(c => c.Status_Cliente === 'Ativo').length, 1)} icon={<DollarSign />} privacyMode={isPrivacyMode} />
-                 </div>
+        {/* SEÇÃO 3: PAINEL DE CONTROLE */}
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-50/50 pointer-events-none -z-10 h-20 -top-10"></div>
+          <ConfigurationsPanel
+            viewClients={currentSimulation.clients}
+            contracts={contracts}
+            monthlyResults={monthlyResults}
+            allCosts={costs}
+            months={availableMonths}
+            settings={settings}
+            growthData={growthData}
+            selectedMonth={selectedMonth}
+            onUpdateContracts={setContracts}
+            onUpdateResults={setMonthlyResults}
+            onUpdateCosts={setCosts}
+            onUpdateSettings={setSettings}
+            onUpdateMonths={setAvailableMonths}
+            onUpdateGrowth={setGrowthData}
+            privacyMode={privacyMode}
+            churn={kpis.churn}
+          />
+        </div>
 
-                 <div className="glass-panel p-8 rounded-[40px] border-none shadow-xl">
-                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                    <Target size={18} className="text-indigo-600"/> Potencial de Receita (Real vs Ideal)
-                  </h3>
-                  <div className="h-[350px]">
-                    <RealVsIdealChart clients={currentView.clients.map(c => ({
-                      ...c, 
-                      idealRevenueBasedOnContract: c.Valor_Sugerido_Renovacao || c.idealRevenue
-                    }))} privacyMode={isPrivacyMode} />
-                  </div>
-                </div>
-
-                <div className="glass-panel rounded-[40px] overflow-hidden border-none shadow-xl">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50">
-                        <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                          <th className="px-8 py-6">Cliente & Origem</th>
-                          <th className="px-6 py-6">Vigência</th>
-                          <th className="px-6 py-6 text-center">Pgto</th>
-                          <th className="px-6 py-6 text-right">Receita Atual</th>
-                          <th className="px-8 py-6 text-right">Sugestão Renovação</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {currentView.clients.length > 0 ? currentView.clients.map(c => {
-                          const daysLeft = getDaysUntilRenewal(c.Data_Renovacao);
-                          return (
-                            <tr key={c.id} className="hover:bg-indigo-50/20 transition-all group">
-                              <td className="px-8 py-6">
-                                <p className="font-black text-slate-900">{c.Cliente}</p>
-                                <div className="flex gap-2 items-center mt-1">
-                                    <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">{c.Origem || 'Indicação'}</span>
-                                    {c.Status_Cliente === 'Inativo' && <span className="text-[9px] bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full font-bold uppercase">Inativo</span>}
-                                    {/* Exibir BADGE se for UI-Z */}
-                                    {c.Tipo_Servico === 'UI-Z' && <span className="text-[9px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold uppercase">UI-Z</span>}
-                                </div>
-                              </td>
-                              <td className="px-6 py-6">
-                                {daysLeft !== null ? (
-                                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase ${
-                                    daysLeft < 0 ? 'bg-rose-100 text-rose-600' :
-                                    daysLeft <= 30 ? 'bg-amber-100 text-amber-600 animate-pulse' :
-                                    'bg-emerald-100 text-emerald-600'
-                                  }`}>
-                                    <Clock size={12}/> {daysLeft < 0 ? 'Expirado' : `${daysLeft} dias`}
-                                  </div>
-                                ) : <span className="text-[10px] font-bold text-slate-300 uppercase">Indefinido</span>}
-                                <div className="mt-1 space-y-0.5">
-                                   <p className="text-[9px] font-bold text-slate-400">Início: {c.Data_Inicio ? new Date(c.Data_Inicio).toLocaleDateString('pt-BR') : '--'}</p>
-                                </div>
-                              </td>
-                              <td className="px-6 py-6 text-center">
-                                <span className="inline-block w-8 py-1 bg-slate-100 rounded text-xs font-black text-slate-600">{c.Dia_Pagamento || '-'}</span>
-                              </td>
-                              <td className="px-6 py-6 text-right">
-                                <span className="font-mono font-black text-slate-900">{isPrivacyMode ? '••••' : formatCurrency(c.Receita_Mensal_BRL)}</span>
-                              </td>
-                              <td className="px-8 py-6 text-right cursor-pointer" onClick={() => handleShortcut('growth_tools')} title="Ir para Calculadora">
-                                <span className="text-emerald-600 font-bold text-xs bg-emerald-50 px-2 py-1 rounded hover:bg-emerald-100 transition-colors">
-                                    {isPrivacyMode ? '••••' : formatCurrency(c.Valor_Sugerido_Renovacao || 0)}
-                                    <ArrowUpRight size={10} className="inline ml-1"/>
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        }) : (
-                          <tr>
-                            <td colSpan={6} className="px-8 py-12 text-center text-slate-400 font-bold text-sm italic">Nenhum contrato encontrado.</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'fin_ops' && (
-              <div className="space-y-8">
-                <div className="glass-panel rounded-[40px] overflow-hidden border-none shadow-xl">
-                    <div className="bg-slate-50 px-8 py-4 border-b border-slate-100 flex justify-between items-center">
-                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Resumo Operacional & Financeiro</h3>
-                    </div>
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 border-b border-slate-100">
-                      <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        <th className="px-8 py-6">Cliente</th>
-                        <th className="px-6 py-6 text-center">Entrega</th>
-                        <th className="px-8 py-6 text-right">Faturamento</th>
-                        <th className="px-8 py-6 text-right">Lucro/Prejuízo</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {currentView.clients.length > 0 ? currentView.clients.map(c => (
-                        <tr key={c.id} className="hover:bg-indigo-50/20 transition-colors">
-                          <td className="px-8 py-6 font-bold text-slate-800">{c.Cliente}</td>
-                          <td className="px-6 py-6 text-center text-sm font-black text-slate-500">
-                             <span className={c.Conteudos_Entregues < c.Conteudos_Contratados ? "text-amber-500" : "text-emerald-500"}>
-                                {c.Conteudos_Entregues}
-                             </span>
-                             <span className="text-slate-300 mx-1">/</span>
-                             {c.Conteudos_Contratados}
-                          </td>
-                          <td className="px-8 py-6 text-right font-mono font-bold text-slate-900">{isPrivacyMode ? '••••' : formatCurrency(c.Receita_Mensal_BRL)}</td>
-                          <td className={`px-8 py-6 text-right font-mono font-bold ${c.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{isPrivacyMode ? '••••' : formatCurrency(c.profit || 0)}</td>
-                        </tr>
-                      )) : (
-                        <tr>
-                          <td colSpan={4} className="px-8 py-12 text-center text-slate-400 font-bold text-sm">Nenhum cliente encontrado.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  <div className="lg:col-span-2 glass-panel rounded-[40px] overflow-hidden border-none shadow-xl">
-                    <div className="bg-slate-50 px-8 py-4 border-b border-slate-100">
-                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Detalhamento de Custos</h3>
-                    </div>
-                    <table className="w-full text-left">
-                      <thead className="bg-white">
-                        <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                          <th className="px-8 py-6">Descrição</th>
-                          <th className="px-8 py-6 text-right">Valor</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {currentView.costs.length > 0 ? currentView.costs.map(c => (
-                          <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-8 py-6 font-bold text-slate-800 flex items-center gap-2">
-                                {c.Tipo_Custo}
-                                <span className="text-[8px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded uppercase">{c.Categoria}</span>
-                            </td>
-                            <td className="px-8 py-6 text-right font-mono font-bold text-slate-900">{isPrivacyMode ? '••••' : formatCurrency(c.Valor_Mensal_BRL)}</td>
-                          </tr>
-                        )) : (
-                          <tr>
-                            <td colSpan={2} className="px-8 py-12 text-center text-slate-400 font-bold text-sm">Nenhuma despesa encontrada.</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="glass-panel p-8 rounded-[40px] shadow-xl">
-                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-8 text-center">Distribuição</h3>
-                    <CostsPieChart costs={currentView.costs} privacyMode={isPrivacyMode} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'annual' && (
-              <div className="glass-panel p-8 rounded-[40px] shadow-xl h-[500px]">
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                    <History size={18} className="text-indigo-600"/> Histórico Anual
-                </h3>
-                <TrendChart data={brain.monthlyMetrics.map(m => ({ month: m.month, revenue: m.netRevenue, cost: m.totalCost, profit: m.netResult }))} privacyMode={isPrivacyMode} />
-              </div>
-            )}
-
-            {activeTab === 'settings' && (
-              <ConfigurationsPanel 
-                viewClients={currentView.clients} 
-                contracts={contracts} 
-                monthlyResults={monthlyResults} 
-                allCosts={allCosts} 
-                months={availableMonths} 
-                settings={settings}
-                growthData={growthData}
-                selectedMonth={selectedMonth}
-                onUpdateContracts={setContracts}
-                onUpdateResults={setMonthlyResults}
-                onUpdateCosts={setAllCosts}
-                onUpdateSettings={setSettings}
-                onUpdateMonths={setAvailableMonths}
-                onUpdateGrowth={setGrowthData}
-                privacyMode={isPrivacyMode}
-                churn={rawView?.churn || 0}
-              />
-            )}
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-            <AlertCircle size={48} className="opacity-20 mb-4" />
-            <p className="font-black uppercase tracking-widest text-sm">Sem dados disponíveis</p>
-          </div>
-        )}
       </main>
+      
+      <footer className="text-center py-12 text-slate-300 text-[10px] font-bold uppercase tracking-widest">
+        Z-Line Business Intelligence &copy; 2026 • Sistema Seguro
+      </footer>
     </div>
   );
-};
-
-const TabButton = ({ id, label, icon: Icon, activeTab, onClick }: any) => {
-  const isActive = activeTab === id;
-  return (
-    <button onClick={() => onClick(id)} className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-black transition-all shrink-0 ${isActive ? 'bg-slate-900 text-white shadow-xl translate-y-[-2px]' : 'text-slate-400 hover:bg-white/60 hover:shadow-sm'}`}>
-      <Icon size={18} className={isActive ? 'text-white' : 'text-slate-400'} /> {label}
-    </button>
-  );
-};
-
-const SplashScreen = () => (
-  <div className="fixed inset-0 z-[100] bg-slate-950 flex items-center justify-center">
-    <div className="text-center animate-pulse">
-      <div className="h-20 w-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white font-black text-5xl mx-auto mb-6 shadow-2xl shadow-indigo-500/50">Z</div>
-      <p className="text-slate-500 font-bold uppercase tracking-[0.5em] text-[10px]">Iniciando Engine Financeiro</p>
-      <p className="text-emerald-500 font-bold text-[8px] mt-2 tracking-widest opacity-80">CONNECTED TO SUPABASE</p>
-    </div>
-  </div>
-);
+}
 
 export default App;
