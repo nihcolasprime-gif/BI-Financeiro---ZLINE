@@ -1,19 +1,18 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-// Tenta pegar as variáveis de ambiente com segurança
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Validação para não quebrar o app silenciosamente
-if (!supabaseUrl || !supabaseAnonKey) {
+const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
+
+if (!hasSupabaseConfig) {
   console.warn(
-    '⚠️ ATENÇÃO: Variáveis de ambiente do Supabase não encontradas. ' +
-    'O sistema pode não funcionar corretamente. Verifique o arquivo .env ou as configurações da Vercel.'
+    '⚠️ Supabase não configurado. Executando em modo local (sem persistência remota). Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para habilitar banco.'
   );
 }
 
-// Cria a conexão única
-export const supabase = createClient(
-  supabaseUrl || '',
-  supabaseAnonKey || ''
-);
+export const isSupabaseEnabled = hasSupabaseConfig;
+
+export const supabase: SupabaseClient | null = hasSupabaseConfig
+  ? createClient(supabaseUrl as string, supabaseAnonKey as string)
+  : null;
