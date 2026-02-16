@@ -1,6 +1,8 @@
 import { supabase, isSupabaseEnabled } from './lib/supabase';
 import { ClientContract, ClientMonthlyResult, CostData, GlobalSettings } from './types';
 
+export { isSupabaseEnabled };
+
 // --- TRADUTORES: DO BANCO PARA O APP (READ) ---
 
 const mapContractFromDB = (data: any): ClientContract => ({

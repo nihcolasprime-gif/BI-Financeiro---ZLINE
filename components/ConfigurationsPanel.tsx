@@ -5,13 +5,15 @@ import {
 } from 'lucide-react';
 import { ClientData, ClientContract, ClientMonthlyResult, CostData, GlobalSettings, MonthlyGrowthData } from '../types';
 import { formatCurrency } from '../utils';
+import { STANDARD_MONTHS } from '../constants';
 
 // Importando as funções do banco que já configuramos
 import { 
   upsertContract, deleteContract, 
   upsertMonthlyResult, 
   upsertCost, deleteCost, 
-  saveSettings, saveGrowthData 
+  saveSettings, saveGrowthData,
+  isSupabaseEnabled
 } from '../database';
 
 interface ConfigurationsPanelProps {
@@ -73,6 +75,36 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
 
   const localId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+
+  const monthFromDate = (dateString?: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return '';
+    return `${STANDARD_MONTHS[date.getUTCMonth()]}/${date.getUTCFullYear()}`;
+  };
+
+
+
+  const monthOrder = (monthLabel?: string) => {
+    if (!monthLabel) return null;
+    const [monthName, yearStr] = monthLabel.split('/');
+    const monthIdx = STANDARD_MONTHS.indexOf(`${monthName}/2026`);
+    const year = Number(yearStr);
+    if (monthIdx < 0 || Number.isNaN(year)) return null;
+    return year * 12 + monthIdx;
+  };
+
+  const isContractActiveInMonth = (contract: ClientContract, monthLabel: string) => {
+    if (contract.Status_Contrato !== 'Ativo') return false;
+    const current = monthOrder(monthLabel);
+    if (current === null) return false;
+    const start = monthOrder(monthFromDate(contract.Data_Inicio));
+    const renewal = monthOrder(monthFromDate(contract.Data_Renovacao));
+    if (start !== null && current < start) return false;
+    if (renewal !== null && current > renewal) return false;
+    return true;
+  };
+
   // --- HANDLERS (Salvar/Deletar) ---
 
   const handleSaveContract = async () => {
@@ -87,6 +119,11 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
       setEditingContract(null);
       showFeedback('success', 'Cliente salvo!');
     } catch (error) {
+      if (isSupabaseEnabled) {
+        showFeedback('error', 'Falha ao salvar no Supabase. Verifique conexão/RLS.');
+        return;
+      }
+
       const fallback: ClientContract = {
         ...(editingContract as ClientContract),
         id: editingContract.id && !String(editingContract.id).startsWith('new_')
@@ -111,6 +148,11 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
       onUpdateContracts(prev => prev.filter(c => c.id !== id));
       showFeedback('success', 'Cliente removido.');
     } catch (error) {
+      if (isSupabaseEnabled) {
+        showFeedback('error', 'Falha ao remover no Supabase. Verifique conexão/RLS.');
+        return;
+      }
+
       onUpdateContracts(prev => prev.filter(c => c.id !== id));
       showFeedback('success', 'Cliente removido localmente.');
     }
@@ -126,6 +168,11 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
       setEditingResult(null);
       showFeedback('success', 'Financeiro atualizado!');
     } catch (error) {
+      if (isSupabaseEnabled) {
+        showFeedback('error', 'Falha ao lançar no Supabase. Verifique conexão/RLS.');
+        return;
+      }
+
       const fallback: ClientMonthlyResult = {
         ...(editingResult as ClientMonthlyResult),
         id: editingResult.id || localId('result')
@@ -149,6 +196,11 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
       setEditingCost(null);
       showFeedback('success', 'Custo salvo!');
     } catch (error) {
+      if (isSupabaseEnabled) {
+        showFeedback('error', 'Falha ao salvar custo no Supabase. Verifique conexão/RLS.');
+        return;
+      }
+
       const fallback: CostData = {
         ...(editingCost as CostData),
         id: editingCost.id || localId('cost')
@@ -170,6 +222,11 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
       onUpdateCosts(prev => prev.filter(c => c.id !== id));
       showFeedback('success', 'Custo removido.');
     } catch (error) {
+      if (isSupabaseEnabled) {
+        showFeedback('error', 'Falha ao remover custo no Supabase. Verifique conexão/RLS.');
+        return;
+      }
+
       onUpdateCosts(prev => prev.filter(c => c.id !== id));
       showFeedback('success', 'Custo removido localmente.');
     }
@@ -184,6 +241,11 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
       onUpdateGrowth(prev => [...prev.filter(g => g.month !== selectedMonth), { month: selectedMonth, adSpend: localAdSpend, leads: localLeads }]);
       showFeedback('success', 'Configurações salvas.');
     } catch (error) {
+      if (isSupabaseEnabled) {
+        showFeedback('error', 'Falha ao salvar config no Supabase. Verifique conexão/RLS.');
+        return;
+      }
+
       onUpdateSettings(localSettings);
       onUpdateGrowth(prev => [...prev.filter(g => g.month !== selectedMonth), { month: selectedMonth, adSpend: localAdSpend, leads: localLeads }]);
       showFeedback('success', 'Configurações salvas localmente (sem conexão com banco).');
@@ -428,7 +490,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                         <h3 className="text-xs font-black text-red-200/70 uppercase tracking-widest">Competência: <span className="text-[#ff2400]">{selectedMonth}</span></h3>
                      </div>
                      <div className="overflow-y-auto custom-scrollbar space-y-2 pr-2">
-                        {contracts.filter(c => c.Status_Contrato === 'Ativo').map(c => {
+                        {contracts.filter(c => isContractActiveInMonth(c, selectedMonth)).map(c => {
                              const hasResult = monthlyResults.find(r => r.contractId === c.id && r.Mes_Referencia === selectedMonth);
                              // Cor da borda/fundo baseada no status de pagamento
                              let statusStyle = 'border-red-500/25 text-red-200/80';
@@ -446,7 +508,10 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                                             setEditingResult(hasResult);
                                         } else {
                                             const isUIZ = c.Tipo_Servico === 'UI-Z';
-                                            const val = isUIZ ? (c.UIZ_Valor_Mensal || 0) : (c.Valor_Sugerido_Renovacao || 0);
+                                            const isFirstMonth = monthFromDate(c.Data_Inicio) === selectedMonth;
+                                            const val = isUIZ
+                                              ? (c.UIZ_Valor_Mensal || 0) + (isFirstMonth ? (c.UIZ_Setup_Fee || 0) : 0)
+                                              : (c.Valor_Sugerido_Renovacao || 0);
                                             setEditingResult({
                                                 contractId: c.id,
                                                 Mes_Referencia: selectedMonth,

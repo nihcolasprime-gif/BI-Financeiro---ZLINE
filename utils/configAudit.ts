@@ -22,6 +22,31 @@ const getMonthYearFromDate = (dateString?: string): string => {
   return `${monthName}/${year}`;
 };
 
+const getMonthOrder = (monthLabel?: string): number | null => {
+  if (!monthLabel) return null;
+  const [monthName, yearStr] = monthLabel.split('/');
+  const monthIndex = STANDARD_MONTHS.indexOf(`${monthName}/2026`);
+  const year = Number(yearStr);
+
+  if (monthIndex < 0 || Number.isNaN(year)) return null;
+  return year * 12 + monthIndex;
+};
+
+const isContractActiveInMonth = (contract: ClientContract, month: string): boolean => {
+  if (contract.Status_Contrato !== 'Ativo') return false;
+
+  const currentOrder = getMonthOrder(month);
+  if (currentOrder === null) return false;
+
+  const startOrder = getMonthOrder(getMonthYearFromDate(contract.Data_Inicio));
+  const renewalOrder = getMonthOrder(getMonthYearFromDate(contract.Data_Renovacao));
+
+  if (startOrder !== null && currentOrder < startOrder) return false;
+  if (renewalOrder !== null && currentOrder > renewalOrder) return false;
+
+  return true;
+};
+
 export const calculateSimulation = (
   month: string,
   contracts: ClientContract[],
@@ -56,7 +81,8 @@ export const calculateSimulation = (
     } else {
       // Se não tem lançamento manual, fazemos a PROJEÇÃO automática
       isProjected = true;
-      if (contract.Status_Contrato === 'Ativo') {
+      const isContractActive = isContractActiveInMonth(contract, month);
+      if (isContractActive) {
         if (contract.Tipo_Servico === 'UI-Z') {
            revenue = contract.UIZ_Valor_Mensal || 0;
            // Adiciona Setup Fee se for o mês de estreia
@@ -70,7 +96,7 @@ export const calculateSimulation = (
     }
 
     // Só soma no "Faturamento Bruto" se o contrato estiver Ativo ou se houver lançamento financeiro
-    if (contract.Status_Contrato === 'Ativo' || realResult) {
+    if (isContractActiveInMonth(contract, month) || realResult) {
         grossRevenue += revenue;
 
         // Lógica de Caixa Real ("Dinheiro na Mão")
@@ -95,7 +121,7 @@ export const calculateSimulation = (
       contractId: contract.id,
       Receita_Mensal_BRL: revenue,
       profit,
-      Status_Cliente: realResult?.Status_Mensal || contract.Status_Contrato,
+      Status_Cliente: realResult?.Status_Mensal || (isContractActiveInMonth(contract, month) ? 'Ativo' : 'Inativo'),
       Status_Pagamento: realResult?.Status_Pagamento || (isProjected ? 'Projetado' : 'Pendente'),
       // Defaults visuais
       Conteudos_Contratados: realResult?.Conteudos_Contratados || 0,
