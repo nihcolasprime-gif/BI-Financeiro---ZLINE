@@ -108,9 +108,9 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center flex-col gap-4">
-        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center flex-col gap-4">
+        <div className="w-8 h-8 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-slate-300 font-bold text-xs uppercase tracking-widest animate-pulse">
           Carregando Z-Line BI...
         </p>
       </div>
@@ -121,50 +121,58 @@ function App() {
   const margin = kpis.grossRevenue > 0 ? kpis.netResult / kpis.grossRevenue : 0;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#dbeafe_0%,_#eef2ff_25%,_#f8fafc_60%)] pb-20 font-sans text-slate-900 selection:bg-indigo-100 selection:text-indigo-900">
-      <nav className="sticky top-0 z-40 mb-8 border-b border-white/60 bg-white/55 px-6 py-4 backdrop-blur-2xl">
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 pb-20 font-sans text-slate-100 selection:bg-cyan-200/80 selection:text-slate-900">
+      <div className="tech-layer" />
+      <div className="tech-grid" />
+      <div className="tech-orb tech-orb-left" />
+      <div className="tech-orb tech-orb-right" />
+
+      <div className="frost-layer-1" />
+      <div className="frost-layer-2" />
+
+      <nav className="sticky top-0 z-40 mb-8 border-b border-white/20 bg-white/10 px-6 py-4 backdrop-blur-3xl">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 md:flex-row">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-slate-900 p-2 shadow-lg shadow-slate-900/20">
-              <LayoutDashboard className="text-white" size={20} />
+            <div className="rounded-xl bg-cyan-400/20 p-2 shadow-lg shadow-cyan-500/25 border border-cyan-200/30">
+              <LayoutDashboard className="text-cyan-100" size={20} />
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-tighter text-slate-900">
-                Z-LINE <span className="text-indigo-600">BI</span>
+              <h1 className="text-lg font-black tracking-tighter text-white">
+                Z-LINE <span className="text-cyan-300">BI</span>
               </h1>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Financial Intelligence • Reformulação Liquid Glass
+              <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-100/80">
+                Financial Intelligence • Glass Control Center
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 rounded-2xl border border-white/70 bg-white/50 p-1.5 backdrop-blur-xl">
+          <div className="flex items-center gap-3 rounded-2xl border border-white/30 bg-white/10 p-1.5 backdrop-blur-2xl">
             <div className="group relative">
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="min-w-[140px] cursor-pointer appearance-none rounded-xl border border-white/70 bg-white/80 py-2 pl-4 pr-10 text-xs font-black uppercase tracking-wide text-slate-700 outline-none transition-all focus:border-indigo-500"
+                className="min-w-[140px] cursor-pointer appearance-none rounded-xl border border-white/30 bg-black/20 py-2 pl-4 pr-10 text-xs font-black uppercase tracking-wide text-cyan-50 outline-none transition-all focus:border-cyan-300"
               >
                 {availableMonths.map((month) => (
-                  <option key={month} value={month}>
+                  <option key={month} value={month} className="text-slate-900">
                     {month}
                   </option>
                 ))}
               </select>
               <Calendar
                 size={14}
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-cyan-100/80"
               />
             </div>
 
-            <div className="mx-1 h-6 w-px bg-slate-300"></div>
+            <div className="mx-1 h-6 w-px bg-white/25"></div>
 
             <button
               onClick={() => setPrivacyMode(!privacyMode)}
               className={`rounded-xl p-2 transition-all ${
                 privacyMode
-                  ? 'bg-indigo-100 text-indigo-700'
-                  : 'bg-white text-slate-400 shadow-sm hover:text-slate-600'
+                  ? 'bg-cyan-300/20 text-cyan-100'
+                  : 'bg-black/20 text-slate-200 shadow-sm hover:text-white'
               }`}
               title="Modo Privacidade"
             >
@@ -174,7 +182,7 @@ function App() {
         </div>
       </nav>
 
-      <main className="mx-auto max-w-7xl space-y-8 px-6">
+      <main className="relative z-10 mx-auto max-w-7xl space-y-8 px-6">
         <DiagnosisPanel
           contracts={contracts}
           monthlyResults={monthlyResults}
@@ -224,7 +232,7 @@ function App() {
         <FinancialCharts data={financialHistory} privacyMode={privacyMode} />
 
         <div className="relative">
-          <div className="pointer-events-none absolute -top-10 inset-x-0 -z-10 h-20 bg-gradient-to-b from-transparent to-slate-50/50"></div>
+          <div className="pointer-events-none absolute -top-10 inset-x-0 -z-10 h-20 bg-gradient-to-b from-transparent to-slate-900/50"></div>
           <ConfigurationsPanel
             viewClients={currentSimulation.clients}
             contracts={contracts}
@@ -246,7 +254,7 @@ function App() {
         </div>
       </main>
 
-      <footer className="py-12 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
+      <footer className="relative z-10 py-12 text-center text-[10px] font-bold uppercase tracking-widest text-cyan-100/70">
         Z-Line Business Intelligence © 2026 • Sistema Seguro
       </footer>
     </div>

@@ -23,9 +23,9 @@ interface Finding {
 }
 
 const levelStyles: Record<FindingLevel, string> = {
-  critico: 'text-rose-600 bg-rose-500/10 border-rose-300/40',
-  atencao: 'text-amber-600 bg-amber-500/10 border-amber-300/40',
-  oportunidade: 'text-indigo-600 bg-indigo-500/10 border-indigo-300/40'
+  critico: 'text-rose-200 bg-rose-500/15 border-rose-300/40',
+  atencao: 'text-amber-200 bg-amber-500/15 border-amber-300/40',
+  oportunidade: 'text-indigo-200 bg-indigo-500/15 border-indigo-300/40'
 };
 
 export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
@@ -130,9 +130,9 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-indigo-500">Auditoria BI 360º</p>
-          <h2 className="text-xl font-black tracking-tight text-slate-900">Problemas, inconsistências e plano de reformulação</h2>
+          <h2 className="text-xl font-black tracking-tight text-white">Problemas, inconsistências e plano de reformulação</h2>
         </div>
-        <span className="rounded-full bg-slate-900 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white">
+        <span className="rounded-full bg-slate-950/80 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white">
           {findings.length} pontos mapeados
         </span>
       </div>
@@ -149,31 +149,31 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
               {item.level === 'oportunidade' && <CheckCircle2 size={16} />}
               <h3 className="text-sm font-black tracking-tight">{item.title}</h3>
             </div>
-            <p className="text-xs font-semibold leading-relaxed text-slate-700">{item.detail}</p>
+            <p className="text-xs font-semibold leading-relaxed text-slate-100/90">{item.detail}</p>
           </article>
         ))}
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="rounded-2xl border border-sky-200/60 bg-sky-100/40 p-4">
-          <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-sky-700">
+        <div className="rounded-2xl border border-sky-200/60 bg-sky-500/10 p-4">
+          <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-sky-200">
             <FlaskConical size={14} /> O que falta
           </p>
-          <p className="text-xs font-semibold text-slate-700">Forecast de caixa por 90 dias, metas por squad e alertas de variação acima de 15% por KPI.</p>
+          <p className="text-xs font-semibold text-slate-100/90">Forecast de caixa por 90 dias, metas por squad e alertas de variação acima de 15% por KPI.</p>
         </div>
 
-        <div className="rounded-2xl border border-violet-200/60 bg-violet-100/40 p-4">
-          <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-violet-700">
+        <div className="rounded-2xl border border-violet-200/60 bg-violet-500/10 p-4">
+          <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-violet-200">
             <Sparkles size={14} /> Liquid Glass
           </p>
-          <p className="text-xs font-semibold text-slate-700">Padronizar cards translúcidos, hierarquia visual por prioridade e estados de risco com brilho contextual.</p>
+          <p className="text-xs font-semibold text-slate-100/90">Padronizar cards translúcidos, hierarquia visual por prioridade e estados de risco com brilho contextual.</p>
         </div>
 
-        <div className="rounded-2xl border border-emerald-200/60 bg-emerald-100/40 p-4">
-          <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-emerald-700">
+        <div className="rounded-2xl border border-emerald-200/60 bg-emerald-500/10 p-4">
+          <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-emerald-200">
             <CheckCircle2 size={14} /> Próximo ciclo
           </p>
-          <p className="text-xs font-semibold text-slate-700">Automatizar importação de dados, versionar regras de cálculo e criar trilha de auditoria para cada ajuste.</p>
+          <p className="text-xs font-semibold text-slate-100/90">Automatizar importação de dados, versionar regras de cálculo e criar trilha de auditoria para cada ajuste.</p>
         </div>
       </div>
     </section>
