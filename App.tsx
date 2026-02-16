@@ -142,7 +142,7 @@ function App() {
                 Z-LINE <span className="text-cyan-300">BI</span>
               </h1>
               <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-100/80">
-                Financial Intelligence • Glass Control Center
+                Central de Performance • BI Operacional
               </p>
             </div>
           </div>

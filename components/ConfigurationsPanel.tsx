@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Settings, Users, FileText, DollarSign, Plus, Trash2, X, 
   Check, Target, Briefcase, AlertTriangle, CreditCard 
@@ -55,6 +55,16 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
   const [localAdSpend, setLocalAdSpend] = useState<number>(
     growthData.find(g => g.month === selectedMonth)?.adSpend || 0
   );
+  const [localLeads, setLocalLeads] = useState<number>(
+    growthData.find(g => g.month === selectedMonth)?.leads || 0
+  );
+
+  useEffect(() => {
+    const currentGrowth = growthData.find(g => g.month === selectedMonth);
+    setLocalAdSpend(currentGrowth?.adSpend || 0);
+    setLocalLeads(currentGrowth?.leads || 0);
+    setLocalSettings(settings);
+  }, [selectedMonth, growthData, settings]);
 
   const showFeedback = (type: 'success' | 'error', msg: string) => {
     setFeedback({ type, msg });
@@ -129,9 +139,9 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
     setIsSubmitting(true);
     try {
       await saveSettings(localSettings);
-      await saveGrowthData(selectedMonth, localAdSpend);
+      await saveGrowthData(selectedMonth, localAdSpend, localLeads);
       onUpdateSettings(localSettings);
-      onUpdateGrowth(prev => [...prev.filter(g => g.month !== selectedMonth), { month: selectedMonth, adSpend: localAdSpend }]);
+      onUpdateGrowth(prev => [...prev.filter(g => g.month !== selectedMonth), { month: selectedMonth, adSpend: localAdSpend, leads: localLeads }]);
       showFeedback('success', 'Configurações salvas.');
     } catch (error) { showFeedback('error', 'Erro ao salvar settings.'); }
     finally { setIsSubmitting(false); }
@@ -181,20 +191,51 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                     <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
                         <Target size={18} className="text-indigo-600"/> Parâmetros do Negócio
                     </h3>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Imposto Médio (%)</label>
-                            <input type="number" step="0.1" value={localSettings.taxRate * 100} onChange={e => setLocalSettings({...localSettings, taxRate: parseFloat(e.target.value)/100})} className="w-full p-4 bg-white rounded-2xl text-lg font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" />
+                            <input type="number" step="0.1" value={localSettings.taxRate * 100} onChange={e => setLocalSettings({...localSettings, taxRate: e.target.value === '' ? 0 : parseFloat(e.target.value)/100})} className="w-full p-4 bg-white rounded-2xl text-lg font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" />
                         </div>
+
                         <div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Margem Alvo (%)</label>
-                            <input type="number" step="1" value={localSettings.targetMargin * 100} onChange={e => setLocalSettings({...localSettings, targetMargin: parseFloat(e.target.value)/100})} className="w-full p-4 bg-white rounded-2xl text-lg font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" />
+                            <input type="number" step="1" value={localSettings.targetMargin * 100} onChange={e => setLocalSettings({...localSettings, targetMargin: e.target.value === '' ? 0 : parseFloat(e.target.value)/100})} className="w-full p-4 bg-white rounded-2xl text-lg font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" />
                         </div>
+
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Capacidade Máxima (clientes)</label>
+                            <input type="number" value={localSettings.maxProductionCapacity} onChange={e => setLocalSettings({...localSettings, maxProductionCapacity: e.target.value === '' ? 0 : parseFloat(e.target.value)})} className="w-full p-4 bg-white rounded-2xl text-lg font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" />
+                        </div>
+
                         <div className="relative">
-                             <div className="absolute top-0 right-0 bg-indigo-100 text-indigo-600 text-[9px] font-bold px-2 py-1 rounded-lg uppercase">Mês: {selectedMonth}</div>
+                            <div className="absolute top-0 right-0 bg-indigo-100 text-indigo-600 text-[9px] font-bold px-2 py-1 rounded-lg uppercase">Mês: {selectedMonth}</div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Investimento em Ads (R$)</label>
                             <input type="number" value={localAdSpend} onChange={e => setLocalAdSpend(e.target.value === '' ? 0 : parseFloat(e.target.value))} className="w-full p-4 bg-indigo-50 rounded-2xl text-lg font-black text-indigo-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" />
                         </div>
+
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Leads do mês</label>
+                            <input type="number" value={localLeads} onChange={e => setLocalLeads(e.target.value === '' ? 0 : parseFloat(e.target.value))} className="w-full p-4 bg-white rounded-2xl text-lg font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" />
+                        </div>
+                    </div>
+
+                    <div className="mt-6 border-t border-slate-200 pt-6">
+                      <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Benchmarks estratégicos</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Churn Máximo (%)</label>
+                          <input type="number" step="0.1" value={localSettings.benchmarks.maxChurn * 100} onChange={e => setLocalSettings({...localSettings, benchmarks: {...localSettings.benchmarks, maxChurn: e.target.value === '' ? 0 : parseFloat(e.target.value)/100}})} className="w-full p-3 bg-white rounded-xl text-sm font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Margem Mínima (%)</label>
+                          <input type="number" step="0.1" value={localSettings.benchmarks.minMargin * 100} onChange={e => setLocalSettings({...localSettings, benchmarks: {...localSettings.benchmarks, minMargin: e.target.value === '' ? 0 : parseFloat(e.target.value)/100}})} className="w-full p-3 bg-white rounded-xl text-sm font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">LTV/CAC Mínimo</label>
+                          <input type="number" step="0.1" value={localSettings.benchmarks.minLtvCac} onChange={e => setLocalSettings({...localSettings, benchmarks: {...localSettings.benchmarks, minLtvCac: e.target.value === '' ? 0 : parseFloat(e.target.value)}})} className="w-full p-3 bg-white rounded-xl text-sm font-black text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                        </div>
+                      </div>
                     </div>
                 </div>
                 <button onClick={handleSaveSettings} disabled={isSubmitting} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20 active:scale-95 disabled:opacity-50">

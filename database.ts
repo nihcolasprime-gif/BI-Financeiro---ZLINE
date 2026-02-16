@@ -187,10 +187,10 @@ export const saveSettings = async (settings: GlobalSettings) => {
   if (error) console.error('Erro settings:', error);
 };
 
-export const saveGrowthData = async (month: string, adSpend: number) => {
+export const saveGrowthData = async (month: string, adSpend: number, leads?: number) => {
   if (!isSupabaseEnabled || !supabase) return;
   const { error } = await supabase
     .from('growth_metrics')
-    .upsert({ reference_month: month, ad_spend: adSpend }, { onConflict: 'reference_month' });
+    .upsert({ reference_month: month, ad_spend: adSpend, leads: leads ?? null }, { onConflict: 'reference_month' });
   if (error) console.error('Erro growth:', error);
 };
