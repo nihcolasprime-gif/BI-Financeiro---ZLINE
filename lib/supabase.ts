@@ -1,7 +1,18 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+const viteUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const viteAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
+const nextPublicUrl = import.meta.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+const nextPublicAnon = (
+  import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+  || import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY?.trim()
+);
+
+const usingNextPublicFallback = !viteUrl && !viteAnonKey && Boolean(nextPublicUrl && nextPublicAnon);
+
+const supabaseUrl = viteUrl || nextPublicUrl;
+const supabaseAnonKey = viteAnonKey || nextPublicAnon;
 
 const hasUrl = Boolean(supabaseUrl);
 const hasKey = Boolean(supabaseAnonKey);
@@ -23,6 +34,10 @@ const hasSupabaseConfig = hasUrl && hasKey && !looksLikeDbUri && looksLikeHttpUr
 if (!hasSupabaseConfig) {
   console.warn(
     `⚠️ Supabase não configurado corretamente. Executando em modo local. ${connectionHint}`
+  );
+} else if (usingNextPublicFallback) {
+  console.warn(
+    'ℹ️ Variáveis NEXT_PUBLIC_* detectadas. Funciona, mas o padrão para Vite é usar VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.'
   );
 }
 
