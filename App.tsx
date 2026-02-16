@@ -109,9 +109,9 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center flex-col gap-4">
-        <div className="w-8 h-8 border-4 border-rose-400 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-300 font-bold text-xs uppercase tracking-widest animate-pulse">
+      <div className="min-h-screen bg-black flex items-center justify-center flex-col gap-4">
+        <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-red-100/80 font-bold text-xs uppercase tracking-widest animate-pulse">
           Carregando Z-Line BI...
         </p>
       </div>
@@ -122,7 +122,7 @@ function App() {
   const margin = kpis.grossRevenue > 0 ? kpis.netResult / kpis.grossRevenue : 0;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-black pb-20 font-sans text-rose-50 selection:bg-rose-200/80 selection:text-black">
+    <div className="relative min-h-screen overflow-hidden bg-black pb-20 font-sans text-red-50 selection:bg-red-500/80 selection:text-black">
       <div className="tech-layer" />
       <div className="tech-grid" />
       <div className="tech-orb tech-orb-left" />
@@ -134,46 +134,46 @@ function App() {
       <nav className="sticky top-0 z-40 mb-8 border-b border-white/20 bg-black/50 px-6 py-4 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 md:flex-row">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-rose-500/20 p-2 shadow-lg shadow-rose-500/25 border border-rose-300/30">
-              <LayoutDashboard className="text-rose-100" size={20} />
+            <div className="rounded-xl bg-red-600/20 p-2 shadow-lg shadow-red-600/25 border border-red-500/40">
+              <LayoutDashboard className="text-red-100" size={20} />
             </div>
             <div>
               <h1 className="text-lg font-black tracking-tighter text-white">
-                Z-LINE <span className="text-rose-300">BI</span>
+                Z-LINE <span className="text-[#ff2400]">BI</span>
               </h1>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-rose-100/80">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-red-100/80">
                 Central de Performance • BI Operacional
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 rounded-2xl border border-rose-300/20 bg-black/30 p-1.5 backdrop-blur-xl">
+          <div className="flex items-center gap-3 rounded-2xl border border-red-500/30 bg-black/30 p-1.5 backdrop-blur-xl">
             <div className="group relative">
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="min-w-[140px] cursor-pointer appearance-none rounded-xl border border-white/30 bg-black/20 py-2 pl-4 pr-10 text-xs font-black uppercase tracking-wide text-rose-50 outline-none transition-all focus:border-rose-300"
+                className="min-w-[140px] cursor-pointer appearance-none rounded-xl border border-white/30 bg-black/20 py-2 pl-4 pr-10 text-xs font-black uppercase tracking-wide text-red-50 outline-none transition-all focus:border-red-500"
               >
                 {availableMonths.map((month) => (
-                  <option key={month} value={month} className="text-slate-900">
+                  <option key={month} value={month} className="text-black">
                     {month}
                   </option>
                 ))}
               </select>
               <Calendar
                 size={14}
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-rose-100/80"
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-red-100/80"
               />
             </div>
 
-            <div className="mx-1 h-6 w-px bg-white/25"></div>
+            <div className="mx-1 h-6 w-px bg-red-500/40"></div>
 
             <button
               onClick={() => setPrivacyMode(!privacyMode)}
               className={`rounded-xl p-2 transition-all ${
                 privacyMode
-                  ? 'bg-rose-500/20 text-rose-100'
-                  : 'bg-black/20 text-slate-200 shadow-sm hover:text-white'
+                  ? 'bg-red-600/30 text-red-100'
+                  : 'bg-black/20 text-red-100/80 shadow-sm hover:text-red-50'
               }`}
               title="Modo Privacidade"
             >
@@ -241,7 +241,7 @@ function App() {
         />
 
         <div className="relative">
-          <div className="pointer-events-none absolute -top-10 inset-x-0 -z-10 h-20 bg-gradient-to-b from-transparent to-slate-900/50"></div>
+          <div className="pointer-events-none absolute -top-10 inset-x-0 -z-10 h-20 bg-gradient-to-b from-transparent to-black/70"></div>
           <ConfigurationsPanel
             viewClients={currentSimulation.clients}
             contracts={contracts}
@@ -263,7 +263,7 @@ function App() {
         </div>
       </main>
 
-      <footer className="relative z-10 py-12 text-center text-[10px] font-bold uppercase tracking-widest text-rose-100/70">
+      <footer className="relative z-10 py-12 text-center text-[10px] font-bold uppercase tracking-widest text-red-100/70">
         Z-Line Business Intelligence © 2026 • Sistema Seguro
       </footer>
     </div>

@@ -23,9 +23,9 @@ interface Finding {
 }
 
 const levelStyles: Record<FindingLevel, string> = {
-  critico: 'text-rose-100 bg-rose-500/20 border-rose-300/40',
-  atencao: 'text-rose-100 bg-rose-900/35 border-rose-300/40',
-  oportunidade: 'text-rose-100 bg-black/35 border-rose-300/30'
+  critico: 'text-red-50 bg-red-600/22 border-red-500/45',
+  atencao: 'text-red-50 bg-red-950/60 border-red-500/40',
+  oportunidade: 'text-red-50 bg-black/60 border-red-500/35'
 };
 
 export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
@@ -126,13 +126,13 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
   }, [contracts, monthlyResults, costs, growthData, selectedMonth, netResult, margin]);
 
   return (
-    <section className="glass-panel rounded-[32px] border border-white/50 bg-white/45 p-6 shadow-[0_24px_90px_-40px_rgba(30,41,59,0.45)] backdrop-blur-2xl">
+    <section className="glass-panel rounded-[32px] border border-red-500/35 bg-black/65 p-6 shadow-[0_28px_90px_-45px_rgba(255,36,0,0.55)] backdrop-blur-2xl">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-rose-300">Auditoria BI 360º</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#ff2400]">Auditoria BI 360º</p>
           <h2 className="text-xl font-black tracking-tight text-white">Problemas, inconsistências e plano de reformulação</h2>
         </div>
-        <span className="rounded-full bg-slate-950/80 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white">
+        <span className="rounded-full bg-black/70 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white">
           {findings.length} pontos mapeados
         </span>
       </div>
@@ -149,31 +149,31 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
               {item.level === 'oportunidade' && <CheckCircle2 size={16} />}
               <h3 className="text-sm font-black tracking-tight">{item.title}</h3>
             </div>
-            <p className="text-xs font-semibold leading-relaxed text-slate-100/90">{item.detail}</p>
+            <p className="text-xs font-semibold leading-relaxed text-red-50/90">{item.detail}</p>
           </article>
         ))}
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="rounded-2xl border border-rose-300/25 bg-black/35 p-4">
-          <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-rose-100">
+        <div className="rounded-2xl border border-red-500/35 bg-black/55 p-4">
+          <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-red-100">
             <FlaskConical size={14} /> O que falta
           </p>
-          <p className="text-xs font-semibold text-slate-100/90">Forecast de caixa por 90 dias, metas por squad e alertas de variação acima de 15% por KPI.</p>
+          <p className="text-xs font-semibold text-red-50/90">Forecast de caixa por 90 dias, metas por squad e alertas de variação acima de 15% por KPI.</p>
         </div>
 
-        <div className="rounded-2xl border border-rose-300/25 bg-black/35 p-4">
-          <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-rose-100">
+        <div className="rounded-2xl border border-red-500/35 bg-black/55 p-4">
+          <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-red-100">
             <Sparkles size={14} /> Liquid Glass
           </p>
-          <p className="text-xs font-semibold text-slate-100/90">Padronizar cards translúcidos, hierarquia visual por prioridade e estados de risco com brilho contextual.</p>
+          <p className="text-xs font-semibold text-red-50/90">Padronizar cards translúcidos, hierarquia visual por prioridade e estados de risco com brilho contextual.</p>
         </div>
 
-        <div className="rounded-2xl border border-rose-300/25 bg-black/35 p-4">
-          <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-rose-100">
+        <div className="rounded-2xl border border-red-500/35 bg-black/55 p-4">
+          <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-red-100">
             <CheckCircle2 size={14} /> Próximo ciclo
           </p>
-          <p className="text-xs font-semibold text-slate-100/90">Automatizar importação de dados, versionar regras de cálculo e criar trilha de auditoria para cada ajuste.</p>
+          <p className="text-xs font-semibold text-red-50/90">Automatizar importação de dados, versionar regras de cálculo e criar trilha de auditoria para cada ajuste.</p>
         </div>
       </div>
     </section>
