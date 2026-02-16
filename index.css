@@ -122,6 +122,23 @@
     z-index: 1;
   }
 
+  .glass-window input,
+  .glass-window select,
+  .glass-window textarea {
+    color: rgb(254 226 226);
+    border: 1px solid rgba(239, 68, 68, 0.28);
+  }
+
+  .glass-window input::placeholder,
+  .glass-window textarea::placeholder {
+    color: rgba(254, 202, 202, 0.65);
+  }
+
+  .glass-window select option {
+    background: #090909;
+    color: #fee2e2;
+  }
+
   .frost-layer-2 {
     position: absolute;
     inset: 0;

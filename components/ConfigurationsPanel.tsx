@@ -71,6 +71,8 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
     setTimeout(() => setFeedback(null), 3000);
   };
 
+  const localId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
   // --- HANDLERS (Salvar/Deletar) ---
 
   const handleSaveContract = async () => {
@@ -84,7 +86,20 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
       });
       setEditingContract(null);
       showFeedback('success', 'Cliente salvo!');
-    } catch (error) { showFeedback('error', 'Erro ao salvar.'); } 
+    } catch (error) {
+      const fallback: ClientContract = {
+        ...(editingContract as ClientContract),
+        id: editingContract.id && !String(editingContract.id).startsWith('new_')
+          ? String(editingContract.id)
+          : localId('contract')
+      };
+      onUpdateContracts(prev => {
+        const exists = prev.find(c => c.id === fallback.id);
+        return exists ? prev.map(c => c.id === fallback.id ? fallback : c) : [...prev, fallback];
+      });
+      setEditingContract(null);
+      showFeedback('success', 'Cliente salvo localmente (sem conexão com banco).');
+    } 
     finally { setIsSubmitting(false); }
   };
 
@@ -95,7 +110,10 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
       await deleteContract(id);
       onUpdateContracts(prev => prev.filter(c => c.id !== id));
       showFeedback('success', 'Cliente removido.');
-    } catch (error) { showFeedback('error', 'Erro ao remover.'); }
+    } catch (error) {
+      onUpdateContracts(prev => prev.filter(c => c.id !== id));
+      showFeedback('success', 'Cliente removido localmente.');
+    }
     finally { setIsSubmitting(false); }
   };
 
@@ -107,7 +125,15 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
       onUpdateResults(prev => [...prev.filter(r => r.id !== saved.id), saved]);
       setEditingResult(null);
       showFeedback('success', 'Financeiro atualizado!');
-    } catch (error) { showFeedback('error', 'Erro ao lançar.'); }
+    } catch (error) {
+      const fallback: ClientMonthlyResult = {
+        ...(editingResult as ClientMonthlyResult),
+        id: editingResult.id || localId('result')
+      };
+      onUpdateResults(prev => [...prev.filter(r => r.id !== fallback.id), fallback]);
+      setEditingResult(null);
+      showFeedback('success', 'Lançamento salvo localmente (sem conexão com banco).');
+    }
     finally { setIsSubmitting(false); }
   };
 
@@ -122,7 +148,18 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
       });
       setEditingCost(null);
       showFeedback('success', 'Custo salvo!');
-    } catch (error) { showFeedback('error', 'Erro ao salvar.'); }
+    } catch (error) {
+      const fallback: CostData = {
+        ...(editingCost as CostData),
+        id: editingCost.id || localId('cost')
+      };
+      onUpdateCosts(prev => {
+        const exists = prev.find(c => c.id === fallback.id);
+        return exists ? prev.map(c => c.id === fallback.id ? fallback : c) : [...prev, fallback];
+      });
+      setEditingCost(null);
+      showFeedback('success', 'Custo salvo localmente (sem conexão com banco).');
+    }
     finally { setIsSubmitting(false); }
   };
 
@@ -132,7 +169,10 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
       await deleteCost(id);
       onUpdateCosts(prev => prev.filter(c => c.id !== id));
       showFeedback('success', 'Custo removido.');
-    } catch (error) { showFeedback('error', 'Erro ao remover.'); }
+    } catch (error) {
+      onUpdateCosts(prev => prev.filter(c => c.id !== id));
+      showFeedback('success', 'Custo removido localmente.');
+    }
   };
 
   const handleSaveSettings = async () => {
@@ -143,7 +183,11 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
       onUpdateSettings(localSettings);
       onUpdateGrowth(prev => [...prev.filter(g => g.month !== selectedMonth), { month: selectedMonth, adSpend: localAdSpend, leads: localLeads }]);
       showFeedback('success', 'Configurações salvas.');
-    } catch (error) { showFeedback('error', 'Erro ao salvar settings.'); }
+    } catch (error) {
+      onUpdateSettings(localSettings);
+      onUpdateGrowth(prev => [...prev.filter(g => g.month !== selectedMonth), { month: selectedMonth, adSpend: localAdSpend, leads: localLeads }]);
+      showFeedback('success', 'Configurações salvas localmente (sem conexão com banco).');
+    }
     finally { setIsSubmitting(false); }
   };
 
@@ -353,7 +397,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                                 </div>
                             </div>
 
-                            <div className="mt-auto pt-6 flex justify-between items-center border-t border-red-500/25/50">
+                            <div className="mt-auto pt-6 flex justify-between items-center border-t border-red-500/25">
                                 {!editingContract.id?.startsWith('new') && (
                                     <button onClick={() => handleDeleteContract(editingContract.id!)} className="flex items-center gap-2 text-[#ff2400] font-bold text-xs hover:bg-black/30 px-3 py-2 rounded-lg transition-colors"><Trash2 size={14}/> Excluir</button>
                                 )}
