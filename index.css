@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Estilização da Barra de Rolagem (Scrollbar) */
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
@@ -20,22 +19,29 @@
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-slate-200 rounded-full;
+    @apply rounded-full bg-slate-200;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     @apply bg-slate-300;
   }
 
-  /* Efeito de Vidro (Glassmorphism) */
   .glass-panel {
-    @apply bg-white/70 backdrop-blur-xl border border-white/50;
+    @apply border border-white/60 bg-white/40 backdrop-blur-2xl;
+    box-shadow:
+      0 24px 60px -36px rgba(15, 23, 42, 0.55),
+      inset 0 1px 1px rgba(255, 255, 255, 0.55);
   }
 }
 
-/* Animações */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
@@ -44,5 +50,5 @@
 
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
-  font-feature-settings: "cv11", "ss01";
+  font-feature-settings: 'cv11', 'ss01';
 }
