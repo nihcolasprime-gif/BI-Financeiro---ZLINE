@@ -50,8 +50,8 @@ const KPICard: React.FC<KPICardProps> = ({
     <div
       onClick={onClick}
       className={`
-        glass-panel-3d relative overflow-hidden rounded-[32px] p-6
-        border border-red-500/35 shadow-2xl
+        glass-window glass-panel-3d rounded-[32px] p-6
+        border border-red-500/40 shadow-2xl
         transition-all duration-500 hover:-translate-y-1 hover:shadow-red-600/25
         ${onClick ? 'cursor-pointer active:scale-[0.99]' : ''}
       `}
@@ -62,7 +62,7 @@ const KPICard: React.FC<KPICardProps> = ({
       <div className="relative z-10">
         <div className="mb-4 flex items-start justify-between">
           <h3 className="text-xs font-black uppercase tracking-widest text-red-100/90">{title}</h3>
-          <div className="rounded-xl border border-red-500/35 bg-black/45 p-2 text-red-100 shadow-sm backdrop-blur-xl">
+          <div className="rounded-xl border border-red-500/35 bg-black/25 p-2 text-red-100 shadow-sm backdrop-blur-xl">
             {icon}
           </div>
         </div>

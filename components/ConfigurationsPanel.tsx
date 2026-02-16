@@ -154,7 +154,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
   }, [contracts, contractFilter]);
 
   return (
-    <div className="glass-panel p-6 rounded-[40px] shadow-xl min-h-[600px] relative overflow-hidden bg-black/60 backdrop-blur-xl">
+    <div className="glass-window p-6 rounded-[40px] shadow-xl min-h-[600px]">
       
       {/* Toast Feedback */}
       {feedback && (
@@ -175,7 +175,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
             <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wide transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-black text-white shadow-xl scale-105' : 'bg-black/45 text-red-200/70 hover:bg-black/55'}`}
+                className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wide transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-black text-white shadow-xl scale-105' : 'bg-black/25 text-red-200/70 hover:bg-black/[0.32]'}`}
             >
                 <tab.icon size={16} /> {tab.label}
             </button>
@@ -187,7 +187,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
         {/* TAB: GERAL (Metas e Ads) */}
         {activeTab === 'geral' && (
             <div className="max-w-3xl mx-auto">
-                <div className="bg-black/45 p-6 rounded-[32px] border border-red-500/25 mb-6">
+                <div className="bg-black/25 p-6 rounded-[32px] border border-red-500/25 mb-6">
                     <h3 className="text-sm font-black text-red-50 uppercase tracking-widest mb-6 flex items-center gap-2">
                         <Target size={18} className="text-[#ff2400]"/> Parâmetros do Negócio
                     </h3>
@@ -195,28 +195,28 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
                             <label className="text-[10px] font-bold text-red-200/70 uppercase mb-2 block">Imposto Médio (%)</label>
-                            <input type="number" step="0.1" value={localSettings.taxRate * 100} onChange={e => setLocalSettings({...localSettings, taxRate: e.target.value === '' ? 0 : parseFloat(e.target.value)/100})} className="w-full p-4 bg-black/50 rounded-2xl text-lg font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30 transition-all" />
+                            <input type="number" step="0.1" value={localSettings.taxRate * 100} onChange={e => setLocalSettings({...localSettings, taxRate: e.target.value === '' ? 0 : parseFloat(e.target.value)/100})} className="w-full p-4 bg-black/30 rounded-2xl text-lg font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30 transition-all" />
                         </div>
 
                         <div>
                             <label className="text-[10px] font-bold text-red-200/70 uppercase mb-2 block">Margem Alvo (%)</label>
-                            <input type="number" step="1" value={localSettings.targetMargin * 100} onChange={e => setLocalSettings({...localSettings, targetMargin: e.target.value === '' ? 0 : parseFloat(e.target.value)/100})} className="w-full p-4 bg-black/50 rounded-2xl text-lg font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30 transition-all" />
+                            <input type="number" step="1" value={localSettings.targetMargin * 100} onChange={e => setLocalSettings({...localSettings, targetMargin: e.target.value === '' ? 0 : parseFloat(e.target.value)/100})} className="w-full p-4 bg-black/30 rounded-2xl text-lg font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30 transition-all" />
                         </div>
 
                         <div>
                             <label className="text-[10px] font-bold text-red-200/70 uppercase mb-2 block">Capacidade Máxima (clientes)</label>
-                            <input type="number" value={localSettings.maxProductionCapacity} onChange={e => setLocalSettings({...localSettings, maxProductionCapacity: e.target.value === '' ? 0 : parseFloat(e.target.value)})} className="w-full p-4 bg-black/50 rounded-2xl text-lg font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30 transition-all" />
+                            <input type="number" value={localSettings.maxProductionCapacity} onChange={e => setLocalSettings({...localSettings, maxProductionCapacity: e.target.value === '' ? 0 : parseFloat(e.target.value)})} className="w-full p-4 bg-black/30 rounded-2xl text-lg font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30 transition-all" />
                         </div>
 
                         <div className="relative">
                             <div className="absolute top-0 right-0 bg-red-500/20 text-[#ff2400] text-[9px] font-bold px-2 py-1 rounded-lg uppercase">Mês: {selectedMonth}</div>
                             <label className="text-[10px] font-bold text-red-200/70 uppercase mb-2 block">Investimento em Ads (R$)</label>
-                            <input type="number" value={localAdSpend} onChange={e => setLocalAdSpend(e.target.value === '' ? 0 : parseFloat(e.target.value))} className="w-full p-4 bg-black/50 rounded-2xl text-lg font-black text-[#ff2400] outline-none focus:ring-2 focus:ring-red-500/30 transition-all" />
+                            <input type="number" value={localAdSpend} onChange={e => setLocalAdSpend(e.target.value === '' ? 0 : parseFloat(e.target.value))} className="w-full p-4 bg-black/30 rounded-2xl text-lg font-black text-[#ff2400] outline-none focus:ring-2 focus:ring-red-500/30 transition-all" />
                         </div>
 
                         <div>
                             <label className="text-[10px] font-bold text-red-200/70 uppercase mb-2 block">Leads do mês</label>
-                            <input type="number" value={localLeads} onChange={e => setLocalLeads(e.target.value === '' ? 0 : parseFloat(e.target.value))} className="w-full p-4 bg-black/50 rounded-2xl text-lg font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30 transition-all" />
+                            <input type="number" value={localLeads} onChange={e => setLocalLeads(e.target.value === '' ? 0 : parseFloat(e.target.value))} className="w-full p-4 bg-black/30 rounded-2xl text-lg font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30 transition-all" />
                         </div>
                     </div>
 
@@ -225,15 +225,15 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                           <label className="text-[10px] font-bold text-red-200/70 uppercase mb-2 block">Churn Máximo (%)</label>
-                          <input type="number" step="0.1" value={localSettings.benchmarks.maxChurn * 100} onChange={e => setLocalSettings({...localSettings, benchmarks: {...localSettings.benchmarks, maxChurn: e.target.value === '' ? 0 : parseFloat(e.target.value)/100}})} className="w-full p-3 bg-black/50 rounded-xl text-sm font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30" />
+                          <input type="number" step="0.1" value={localSettings.benchmarks.maxChurn * 100} onChange={e => setLocalSettings({...localSettings, benchmarks: {...localSettings.benchmarks, maxChurn: e.target.value === '' ? 0 : parseFloat(e.target.value)/100}})} className="w-full p-3 bg-black/30 rounded-xl text-sm font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30" />
                         </div>
                         <div>
                           <label className="text-[10px] font-bold text-red-200/70 uppercase mb-2 block">Margem Mínima (%)</label>
-                          <input type="number" step="0.1" value={localSettings.benchmarks.minMargin * 100} onChange={e => setLocalSettings({...localSettings, benchmarks: {...localSettings.benchmarks, minMargin: e.target.value === '' ? 0 : parseFloat(e.target.value)/100}})} className="w-full p-3 bg-black/50 rounded-xl text-sm font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30" />
+                          <input type="number" step="0.1" value={localSettings.benchmarks.minMargin * 100} onChange={e => setLocalSettings({...localSettings, benchmarks: {...localSettings.benchmarks, minMargin: e.target.value === '' ? 0 : parseFloat(e.target.value)/100}})} className="w-full p-3 bg-black/30 rounded-xl text-sm font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30" />
                         </div>
                         <div>
                           <label className="text-[10px] font-bold text-red-200/70 uppercase mb-2 block">LTV/CAC Mínimo</label>
-                          <input type="number" step="0.1" value={localSettings.benchmarks.minLtvCac} onChange={e => setLocalSettings({...localSettings, benchmarks: {...localSettings.benchmarks, minLtvCac: e.target.value === '' ? 0 : parseFloat(e.target.value)}})} className="w-full p-3 bg-black/50 rounded-xl text-sm font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30" />
+                          <input type="number" step="0.1" value={localSettings.benchmarks.minLtvCac} onChange={e => setLocalSettings({...localSettings, benchmarks: {...localSettings.benchmarks, minLtvCac: e.target.value === '' ? 0 : parseFloat(e.target.value)}})} className="w-full p-3 bg-black/30 rounded-xl text-sm font-black text-red-100 outline-none focus:ring-2 focus:ring-red-500/30" />
                         </div>
                       </div>
                     </div>
@@ -255,21 +255,21 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                         <button onClick={() => setEditingContract({ id: `new_${Date.now()}`, Status_Contrato: 'Ativo', Tipo_Servico: 'Agency' })} className="p-2 bg-red-600 text-white rounded-xl shadow-lg hover:bg-red-700 transition-all"><Plus size={18}/></button>
                     </div>
                     
-                    <div className="bg-black/55 p-1 rounded-xl flex gap-1">
+                    <div className="bg-black/[0.32] p-1 rounded-xl flex gap-1">
                         {['Todos', 'Agency', 'UI-Z'].map(type => (
-                            <button key={type} onClick={() => setContractFilter(type as any)} className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-all ${contractFilter === type ? 'bg-black/50 text-red-50 shadow-sm' : 'text-red-200/70 hover:text-red-200'}`}>{type}</button>
+                            <button key={type} onClick={() => setContractFilter(type as any)} className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-all ${contractFilter === type ? 'bg-black/30 text-red-50 shadow-sm' : 'text-red-200/70 hover:text-red-200'}`}>{type}</button>
                         ))}
                     </div>
 
                     <div className="overflow-y-auto custom-scrollbar space-y-2 pr-2">
                         {filteredContracts.map(c => (
-                            <div key={c.id} onClick={() => setEditingContract(c)} className={`cursor-pointer p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-95 ${editingContract?.id === c.id ? 'bg-red-600/20 border-red-500/50 ring-2 ring-red-500' : 'bg-black/50 border-red-500/25 hover:border-red-500/50 hover:shadow-md'}`}>
+                            <div key={c.id} onClick={() => setEditingContract(c)} className={`cursor-pointer p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-95 ${editingContract?.id === c.id ? 'bg-red-600/20 border-red-500/50 ring-2 ring-red-500' : 'bg-black/30 border-red-500/25 hover:border-red-500/50 hover:shadow-md'}`}>
                                 <div className="flex justify-between items-start mb-2">
                                     <h4 className={`font-bold text-sm ${editingContract?.id === c.id ? 'text-white' : 'text-red-50'}`}>{c.Cliente}</h4>
                                     <span className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase ${c.Status_Contrato === 'Ativo' ? 'bg-red-500/20 text-[#ff2400]' : 'bg-red-500/20 text-[#ff2400]'}`}>{c.Status_Contrato}</span>
                                 </div>
                                 <div className="flex gap-2">
-                                    <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded-lg ${c.Tipo_Servico === 'UI-Z' ? 'bg-black/70 text-white' : 'bg-black/60 text-red-200/80'}`}>{c.Tipo_Servico || 'Agency'}</span>
+                                    <span className={`text-[9px] font-bold uppercase px-2 py-1 rounded-lg ${c.Tipo_Servico === 'UI-Z' ? 'bg-black/70 text-white' : 'bg-black/30 text-red-200/80'}`}>{c.Tipo_Servico || 'Agency'}</span>
                                     {c.Tipo_Servico === 'UI-Z' && <span className="text-[9px] font-mono text-[#ff2400] pt-1">R$ {c.UIZ_Valor_Mensal}/mês</span>}
                                 </div>
                             </div>
@@ -278,7 +278,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                 </div>
 
                 {/* Formulário (Direita) */}
-                <div className="lg:col-span-2 bg-black/45 rounded-[32px] p-8 border border-red-500/25 relative">
+                <div className="lg:col-span-2 bg-black/25 rounded-[32px] p-8 border border-red-500/25 relative">
                     {editingContract ? (
                         <div className="animate-fade-in h-full flex flex-col">
                             <div className="flex justify-between items-center mb-6">
@@ -290,22 +290,22 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                             </div>
 
                             <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-6">
-                                <div className="bg-black/50 p-5 rounded-3xl shadow-sm border border-red-500/25">
+                                <div className="bg-black/30 p-5 rounded-3xl shadow-sm border border-red-500/25">
                                     <div className="grid grid-cols-2 gap-4 mb-4">
                                         <div className="col-span-2 md:col-span-1">
                                             <label className="text-[10px] font-bold text-red-200/70 uppercase mb-1 block">Cliente</label>
-                                            <input type="text" value={editingContract.Cliente || ''} onChange={e => setEditingContract({...editingContract, Cliente: e.target.value})} className="w-full p-3 bg-black/45 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-red-500/30" autoFocus />
+                                            <input type="text" value={editingContract.Cliente || ''} onChange={e => setEditingContract({...editingContract, Cliente: e.target.value})} className="w-full p-3 bg-black/25 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-red-500/30" autoFocus />
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-bold text-red-200/70 uppercase mb-1 block">Tipo de Serviço</label>
-                                            <select value={editingContract.Tipo_Servico || 'Agency'} onChange={e => setEditingContract({...editingContract, Tipo_Servico: e.target.value as any})} className="w-full p-3 bg-black/45 rounded-xl text-sm font-bold outline-none cursor-pointer">
+                                            <select value={editingContract.Tipo_Servico || 'Agency'} onChange={e => setEditingContract({...editingContract, Tipo_Servico: e.target.value as any})} className="w-full p-3 bg-black/25 rounded-xl text-sm font-bold outline-none cursor-pointer">
                                                 <option value="Agency">Agency (Serviço)</option>
                                                 <option value="UI-Z">UI-Z (Assinatura)</option>
                                             </select>
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-bold text-red-200/70 uppercase mb-1 block">Status</label>
-                                            <select value={editingContract.Status_Contrato} onChange={e => setEditingContract({...editingContract, Status_Contrato: e.target.value as any})} className="w-full p-3 bg-black/45 rounded-xl text-sm font-bold outline-none cursor-pointer">
+                                            <select value={editingContract.Status_Contrato} onChange={e => setEditingContract({...editingContract, Status_Contrato: e.target.value as any})} className="w-full p-3 bg-black/25 rounded-xl text-sm font-bold outline-none cursor-pointer">
                                                 <option value="Ativo">Ativo</option>
                                                 <option value="Inativo">Inativo</option>
                                             </select>
@@ -314,7 +314,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                                 </div>
 
                                 {/* Bloco Dinâmico (UI-Z vs Agency) */}
-                                <div className={`p-5 rounded-3xl shadow-sm border transition-all ${editingContract.Tipo_Servico === 'UI-Z' ? 'bg-black/50 border-red-500/40' : 'bg-black/50 border-red-500/25'}`}>
+                                <div className={`p-5 rounded-3xl shadow-sm border transition-all ${editingContract.Tipo_Servico === 'UI-Z' ? 'bg-black/30 border-red-500/40' : 'bg-black/30 border-red-500/25'}`}>
                                     <h4 className={`text-xs font-black uppercase mb-4 ${editingContract.Tipo_Servico === 'UI-Z' ? 'text-[#ff2400]' : 'text-red-200/70'}`}>
                                         {editingContract.Tipo_Servico === 'UI-Z' ? 'Plano de Assinatura' : 'Detalhes do Contrato'}
                                     </h4>
@@ -323,30 +323,30 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
                                                 <label className="text-[10px] font-bold text-red-300 uppercase mb-1 block">Setup Fee (Taxa Única)</label>
-                                                <input type="number" value={editingContract.UIZ_Setup_Fee ?? ''} onChange={e => setEditingContract({...editingContract, UIZ_Setup_Fee: e.target.value === '' ? undefined : parseFloat(e.target.value)})} className="w-full p-3 bg-black/50 rounded-xl text-sm font-bold outline-none text-[#ff2400]" />
+                                                <input type="number" value={editingContract.UIZ_Setup_Fee ?? ''} onChange={e => setEditingContract({...editingContract, UIZ_Setup_Fee: e.target.value === '' ? undefined : parseFloat(e.target.value)})} className="w-full p-3 bg-black/30 rounded-xl text-sm font-bold outline-none text-[#ff2400]" />
                                             </div>
                                             <div>
                                                 <label className="text-[10px] font-bold text-red-300 uppercase mb-1 block">Valor Mensal (Recorrente)</label>
-                                                <input type="number" value={editingContract.UIZ_Valor_Mensal ?? ''} onChange={e => setEditingContract({...editingContract, UIZ_Valor_Mensal: e.target.value === '' ? undefined : parseFloat(e.target.value)})} className="w-full p-3 bg-black/50 rounded-xl text-sm font-bold outline-none text-[#ff2400]" />
+                                                <input type="number" value={editingContract.UIZ_Valor_Mensal ?? ''} onChange={e => setEditingContract({...editingContract, UIZ_Valor_Mensal: e.target.value === '' ? undefined : parseFloat(e.target.value)})} className="w-full p-3 bg-black/30 rounded-xl text-sm font-bold outline-none text-[#ff2400]" />
                                             </div>
                                             <div className="col-span-2">
                                                  <label className="text-[10px] font-bold text-red-200/70 uppercase mb-1 block">Data de Início</label>
-                                                 <input type="date" value={editingContract.Data_Inicio || ''} onChange={e => setEditingContract({...editingContract, Data_Inicio: e.target.value})} className="w-full p-3 bg-black/50 rounded-xl text-xs font-bold outline-none" />
+                                                 <input type="date" value={editingContract.Data_Inicio || ''} onChange={e => setEditingContract({...editingContract, Data_Inicio: e.target.value})} className="w-full p-3 bg-black/30 rounded-xl text-xs font-bold outline-none" />
                                             </div>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
                                                 <label className="text-[10px] font-bold text-red-200/70 uppercase mb-1 block">Início</label>
-                                                <input type="date" value={editingContract.Data_Inicio || ''} onChange={e => setEditingContract({...editingContract, Data_Inicio: e.target.value})} className="w-full p-3 bg-black/45 rounded-xl text-xs font-bold outline-none" />
+                                                <input type="date" value={editingContract.Data_Inicio || ''} onChange={e => setEditingContract({...editingContract, Data_Inicio: e.target.value})} className="w-full p-3 bg-black/25 rounded-xl text-xs font-bold outline-none" />
                                             </div>
                                             <div>
                                                 <label className="text-[10px] font-bold text-red-200/70 uppercase mb-1 block">Renovação</label>
-                                                <input type="date" value={editingContract.Data_Renovacao || ''} onChange={e => setEditingContract({...editingContract, Data_Renovacao: e.target.value})} className="w-full p-3 bg-black/45 rounded-xl text-xs font-bold outline-none" />
+                                                <input type="date" value={editingContract.Data_Renovacao || ''} onChange={e => setEditingContract({...editingContract, Data_Renovacao: e.target.value})} className="w-full p-3 bg-black/25 rounded-xl text-xs font-bold outline-none" />
                                             </div>
                                             <div>
                                                 <label className="text-[10px] font-bold text-red-200/70 uppercase mb-1 block">Valor Sugerido</label>
-                                                <input type="number" value={editingContract.Valor_Sugerido_Renovacao ?? ''} onChange={e => setEditingContract({...editingContract, Valor_Sugerido_Renovacao: e.target.value === '' ? undefined : parseFloat(e.target.value)})} className="w-full p-3 bg-black/45 rounded-xl text-sm font-bold outline-none" />
+                                                <input type="number" value={editingContract.Valor_Sugerido_Renovacao ?? ''} onChange={e => setEditingContract({...editingContract, Valor_Sugerido_Renovacao: e.target.value === '' ? undefined : parseFloat(e.target.value)})} className="w-full p-3 bg-black/25 rounded-xl text-sm font-bold outline-none" />
                                             </div>
                                         </div>
                                     )}
@@ -355,7 +355,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
 
                             <div className="mt-auto pt-6 flex justify-between items-center border-t border-red-500/25/50">
                                 {!editingContract.id?.startsWith('new') && (
-                                    <button onClick={() => handleDeleteContract(editingContract.id!)} className="flex items-center gap-2 text-[#ff2400] font-bold text-xs hover:bg-black/50 px-3 py-2 rounded-lg transition-colors"><Trash2 size={14}/> Excluir</button>
+                                    <button onClick={() => handleDeleteContract(editingContract.id!)} className="flex items-center gap-2 text-[#ff2400] font-bold text-xs hover:bg-black/30 px-3 py-2 rounded-lg transition-colors"><Trash2 size={14}/> Excluir</button>
                                 )}
                                 <div className="flex gap-3 ml-auto">
                                     <button onClick={handleSaveContract} disabled={isSubmitting} className="flex items-center gap-2 px-6 py-3 bg-black text-white rounded-xl font-bold text-xs shadow-lg hover:bg-red-950 transition-all">
@@ -389,9 +389,9 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                              // Cor da borda/fundo baseada no status de pagamento
                              let statusStyle = 'border-red-500/25 text-red-200/80';
                              if (hasResult) {
-                                 if (hasResult.Status_Pagamento === 'Pago') statusStyle = 'bg-black/50 border-red-500/40 text-[#ff2400]';
-                                 else if (hasResult.Status_Pagamento === 'Atrasado') statusStyle = 'bg-black/50 border-red-500/40 text-[#ff2400]';
-                                 else statusStyle = 'bg-black/50 border-red-500/40 text-[#ff2400]';
+                                 if (hasResult.Status_Pagamento === 'Pago') statusStyle = 'bg-black/30 border-red-500/40 text-[#ff2400]';
+                                 else if (hasResult.Status_Pagamento === 'Atrasado') statusStyle = 'bg-black/30 border-red-500/40 text-[#ff2400]';
+                                 else statusStyle = 'bg-black/30 border-red-500/40 text-[#ff2400]';
                              }
 
                              return (
@@ -434,9 +434,9 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                  </div>
 
                  {/* Formulário Lançamento (Direita) */}
-                 <div className="lg:col-span-2 bg-black/45 rounded-[32px] p-8 border border-red-500/25 flex flex-col justify-center">
+                 <div className="lg:col-span-2 bg-black/25 rounded-[32px] p-8 border border-red-500/25 flex flex-col justify-center">
                     {editingResult ? (
-                        <div className="animate-fade-in max-w-lg mx-auto w-full bg-black/50 p-8 rounded-[32px] shadow-xl border border-red-500/25">
+                        <div className="animate-fade-in max-w-lg mx-auto w-full bg-black/30 p-8 rounded-[32px] shadow-xl border border-red-500/25">
                             <h4 className="text-center text-sm font-black text-red-50 uppercase mb-8">
                                 Lançamento Financeiro
                                 <span className="block text-[10px] text-red-200/70 mt-1">{contracts.find(c => c.id === editingResult.contractId)?.Cliente}</span>
@@ -452,7 +452,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                                                 type="number" 
                                                 value={editingResult.Receita_Mensal_BRL ?? ''} 
                                                 onChange={e => setEditingResult({...editingResult, Receita_Mensal_BRL: e.target.value === '' ? 0 : parseFloat(e.target.value)})}
-                                                className="w-full p-4 pl-10 bg-black/45 rounded-2xl text-xl font-black text-red-50 outline-none focus:ring-2 focus:ring-red-500/30" 
+                                                className="w-full p-4 pl-10 bg-black/25 rounded-2xl text-xl font-black text-red-50 outline-none focus:ring-2 focus:ring-red-500/30" 
                                             />
                                         </div>
                                     </div>
@@ -499,10 +499,10 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                      </div>
                      <div className="overflow-y-auto custom-scrollbar space-y-2 pr-2">
                         {allCosts.filter(c => c.Mes_Referencia === selectedMonth).map(c => (
-                            <div key={c.id} className="p-4 bg-black/50 rounded-2xl border border-red-500/25 flex justify-between items-center group hover:shadow-md transition-all">
+                            <div key={c.id} className="p-4 bg-black/30 rounded-2xl border border-red-500/25 flex justify-between items-center group hover:shadow-md transition-all">
                                  <div>
                                     <p className="font-bold text-red-50 text-sm">{c.Tipo_Custo}</p>
-                                    <span className="text-[9px] bg-black/55 text-red-200/70 px-2 py-0.5 rounded uppercase">{c.Categoria}</span>
+                                    <span className="text-[9px] bg-black/[0.32] text-red-200/70 px-2 py-0.5 rounded uppercase">{c.Categoria}</span>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <span className="font-mono font-bold text-[#ff2400] text-xs">{privacyMode ? '••••' : formatCurrency(c.Valor_Mensal_BRL)}</span>
@@ -514,7 +514,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                  </div>
                  
                  {editingCost && (
-                    <div className="lg:col-span-2 bg-black/50 rounded-[32px] p-8 border border-red-500/25 shadow-xl animate-fade-in h-fit self-center">
+                    <div className="lg:col-span-2 bg-black/30 rounded-[32px] p-8 border border-red-500/25 shadow-xl animate-fade-in h-fit self-center">
                         <div className="flex justify-between mb-6">
                             <h4 className="text-sm font-black text-red-50 uppercase">Nova Despesa</h4>
                             <button onClick={() => setEditingCost(null)}><X size={20} className="text-red-200/70"/></button>
@@ -522,15 +522,15 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                         <div className="grid grid-cols-2 gap-4 mb-6">
                             <div className="col-span-2">
                                 <label className="text-[10px] font-bold text-red-200/70 uppercase mb-1 block">Descrição</label>
-                                <input type="text" value={editingCost.Tipo_Custo || ''} onChange={e => setEditingCost({...editingCost, Tipo_Custo: e.target.value})} className="w-full p-3 bg-black/45 rounded-xl text-sm font-bold outline-none" autoFocus />
+                                <input type="text" value={editingCost.Tipo_Custo || ''} onChange={e => setEditingCost({...editingCost, Tipo_Custo: e.target.value})} className="w-full p-3 bg-black/25 rounded-xl text-sm font-bold outline-none" autoFocus />
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-red-200/70 uppercase mb-1 block">Valor (R$)</label>
-                                <input type="number" value={editingCost.Valor_Mensal_BRL ?? ''} onChange={e => setEditingCost({...editingCost, Valor_Mensal_BRL: e.target.value === '' ? 0 : parseFloat(e.target.value)})} className="w-full p-3 bg-black/45 rounded-xl text-sm font-bold outline-none text-[#ff2400]" />
+                                <input type="number" value={editingCost.Valor_Mensal_BRL ?? ''} onChange={e => setEditingCost({...editingCost, Valor_Mensal_BRL: e.target.value === '' ? 0 : parseFloat(e.target.value)})} className="w-full p-3 bg-black/25 rounded-xl text-sm font-bold outline-none text-[#ff2400]" />
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-red-200/70 uppercase mb-1 block">Categoria</label>
-                                <select value={editingCost.Categoria} onChange={e => setEditingCost({...editingCost, Categoria: e.target.value as any})} className="w-full p-3 bg-black/45 rounded-xl text-sm font-bold outline-none cursor-pointer">
+                                <select value={editingCost.Categoria} onChange={e => setEditingCost({...editingCost, Categoria: e.target.value as any})} className="w-full p-3 bg-black/25 rounded-xl text-sm font-bold outline-none cursor-pointer">
                                     <option value="Operacional">Operacional</option>
                                     <option value="Administrativo">Administrativo</option>
                                     <option value="Impostos">Impostos</option>

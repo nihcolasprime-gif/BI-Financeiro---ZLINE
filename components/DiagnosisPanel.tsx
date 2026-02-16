@@ -25,7 +25,7 @@ interface Finding {
 const levelStyles: Record<FindingLevel, string> = {
   critico: 'text-red-50 bg-red-600/22 border-red-500/45',
   atencao: 'text-red-50 bg-red-950/60 border-red-500/40',
-  oportunidade: 'text-red-50 bg-black/60 border-red-500/35'
+  oportunidade: 'text-red-50 bg-black/30 border-red-500/35'
 };
 
 export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
@@ -126,7 +126,7 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
   }, [contracts, monthlyResults, costs, growthData, selectedMonth, netResult, margin]);
 
   return (
-    <section className="glass-panel rounded-[32px] border border-red-500/35 bg-black/65 p-6 shadow-[0_28px_90px_-45px_rgba(255,36,0,0.55)] backdrop-blur-2xl">
+    <section className="glass-window p-6 shadow-[0_30px_90px_-52px_rgba(255,36,0,0.55)]">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#ff2400]">Auditoria BI 360º</p>
@@ -155,21 +155,21 @@ export const DiagnosisPanel: React.FC<DiagnosisPanelProps> = ({
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="rounded-2xl border border-red-500/35 bg-black/55 p-4">
+        <div className="rounded-2xl border border-red-500/35 bg-black/[0.32] p-4">
           <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-red-100">
             <FlaskConical size={14} /> O que falta
           </p>
           <p className="text-xs font-semibold text-red-50/90">Forecast de caixa por 90 dias, metas por squad e alertas de variação acima de 15% por KPI.</p>
         </div>
 
-        <div className="rounded-2xl border border-red-500/35 bg-black/55 p-4">
+        <div className="rounded-2xl border border-red-500/35 bg-black/[0.32] p-4">
           <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-red-100">
             <Sparkles size={14} /> Liquid Glass
           </p>
           <p className="text-xs font-semibold text-red-50/90">Padronizar cards translúcidos, hierarquia visual por prioridade e estados de risco com brilho contextual.</p>
         </div>
 
-        <div className="rounded-2xl border border-red-500/35 bg-black/55 p-4">
+        <div className="rounded-2xl border border-red-500/35 bg-black/[0.32] p-4">
           <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-red-100">
             <CheckCircle2 size={14} /> Próximo ciclo
           </p>

@@ -46,7 +46,7 @@ export const FinancialCharts: React.FC<ChartsProps> = ({ data, privacyMode }) =>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
       
       {/* GRÁFICO 1: COMPOSIÇÃO DE RECEITA (UI-Z vs AGÊNCIA) */}
-      <div className="glass-panel p-6 rounded-[32px] border border-red-500/30 shadow-xl bg-black/35 backdrop-blur-xl">
+      <div className="glass-window p-6 shadow-xl">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h3 className="text-xs font-black text-red-100 uppercase tracking-widest">Fontes de Receita</h3>
@@ -97,7 +97,7 @@ export const FinancialCharts: React.FC<ChartsProps> = ({ data, privacyMode }) =>
       </div>
 
       {/* GRÁFICO 2: SAÚDE FINANCEIRA (LUCRO vs CUSTOS) */}
-      <div className="glass-panel p-6 rounded-[32px] border border-red-500/30 shadow-xl bg-black/35 backdrop-blur-xl">
+      <div className="glass-window p-6 shadow-xl">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h3 className="text-xs font-black text-red-100 uppercase tracking-widest">Saúde Financeira</h3>

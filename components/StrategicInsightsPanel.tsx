@@ -125,13 +125,13 @@ export const StrategicInsightsPanel: React.FC<StrategicInsightsPanelProps> = ({
   ];
 
   return (
-    <section className="glass-panel rounded-[32px] border border-red-500/35 bg-black/60 p-6">
+    <section className="glass-window p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#ff2400]">Analytics Estratégico</p>
           <h2 className="text-xl font-black text-red-50">Rentabilidade, segmentos e valor ideal de contrato</h2>
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-red-500/35 bg-black/45 px-3 py-2 text-[11px] font-bold text-red-100">
+        <div className="flex items-center gap-2 rounded-xl border border-red-500/35 bg-black/25 px-3 py-2 text-[11px] font-bold text-red-100">
           <BarChart3 size={14} /> Competência {selectedMonth}
         </div>
       </div>
@@ -144,7 +144,7 @@ export const StrategicInsightsPanel: React.FC<StrategicInsightsPanelProps> = ({
             className={`rounded-xl border px-3 py-2 text-[11px] font-black uppercase tracking-wide transition-all ${
               activeTab === tab.key
                 ? 'border-red-500/60 bg-red-600/25 text-red-50'
-                : 'border-red-500/25 bg-black/45 text-red-100/85 hover:bg-red-600/15'
+                : 'border-red-500/25 bg-black/25 text-red-100/85 hover:bg-red-600/15'
             }`}
           >
             <span className="flex items-center justify-center gap-2">{tab.icon} {tab.label}</span>
@@ -155,7 +155,7 @@ export const StrategicInsightsPanel: React.FC<StrategicInsightsPanelProps> = ({
       {activeTab === 'segmentos' && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {(Object.entries(analytics.segmentBase) as Array<[SegmentLabel, { count: number; revenue: number }]>).map(([segment, data]) => (
-            <article key={segment} className="rounded-2xl border border-red-500/30 bg-black/55 p-4">
+            <article key={segment} className="rounded-2xl border border-red-500/30 bg-black/[0.32] p-4">
               <p className="text-[11px] font-black uppercase text-red-100/90">{segment}</p>
               <p className="mt-2 text-2xl font-black text-red-50">{data.count}</p>
               <p className="text-xs font-semibold text-red-100/85">Receita no mês: {formatCurrency(data.revenue)}</p>
@@ -167,7 +167,7 @@ export const StrategicInsightsPanel: React.FC<StrategicInsightsPanelProps> = ({
       {activeTab === 'prejuizo' && (
         <div className="space-y-2">
           {analytics.lossClients.slice(0, 8).map((item) => (
-            <article key={item.client} className="grid grid-cols-1 gap-2 rounded-2xl border border-red-500/30 bg-black/55 p-4 text-xs md:grid-cols-5">
+            <article key={item.client} className="grid grid-cols-1 gap-2 rounded-2xl border border-red-500/30 bg-black/[0.32] p-4 text-xs md:grid-cols-5">
               <p className="font-black text-red-50 md:col-span-2">{item.client} <span className="font-semibold text-[#ff2400]/80">• {item.segment}</span></p>
               <p className="font-bold text-red-100/85">Receita: {formatCurrency(item.revenue)}</p>
               <p className="font-bold text-red-100/85">Custo médio: {formatCurrency(item.avgCostShare)}</p>
@@ -181,15 +181,15 @@ export const StrategicInsightsPanel: React.FC<StrategicInsightsPanelProps> = ({
 
       {activeTab === 'custos' && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <article className="rounded-2xl border border-red-500/30 bg-black/55 p-4">
+          <article className="rounded-2xl border border-red-500/30 bg-black/[0.32] p-4">
             <p className="text-[11px] font-black uppercase text-red-100">Custo médio por cliente</p>
             <p className="mt-2 text-2xl font-black text-red-50">{formatCurrency(analytics.avgCostPerClient)}</p>
           </article>
-          <article className="rounded-2xl border border-red-500/30 bg-black/55 p-4">
+          <article className="rounded-2xl border border-red-500/30 bg-black/[0.32] p-4">
             <p className="text-[11px] font-black uppercase text-red-100">Valor real médio</p>
             <p className="mt-2 text-2xl font-black text-red-50">{formatCurrency(analytics.averageRevenuePerClient)}</p>
           </article>
-          <article className="rounded-2xl border border-red-500/30 bg-black/55 p-4">
+          <article className="rounded-2xl border border-red-500/30 bg-black/[0.32] p-4">
             <p className="text-[11px] font-black uppercase text-red-100">Valor ideal médio</p>
             <p className="mt-2 text-2xl font-black text-red-50">{formatCurrency(analytics.idealContractValue)}</p>
             <p className={`mt-2 text-xs font-bold ${analytics.monthlyImpact <= 0 ? 'text-red-100' : 'text-[#ff2400]'}`}>
@@ -202,7 +202,7 @@ export const StrategicInsightsPanel: React.FC<StrategicInsightsPanelProps> = ({
       {activeTab === 'evolucao' && (
         <div className="space-y-2">
           {analytics.clientsEvolution.slice(0, 10).map((client) => (
-            <article key={client.client} className="grid grid-cols-1 gap-2 rounded-2xl border border-red-500/30 bg-black/55 p-4 text-xs md:grid-cols-4">
+            <article key={client.client} className="grid grid-cols-1 gap-2 rounded-2xl border border-red-500/30 bg-black/[0.32] p-4 text-xs md:grid-cols-4">
               <p className="font-black text-red-50">{client.client}</p>
               <p className="font-bold text-red-100/85">Média: {formatCurrency(client.average)}</p>
               <p className="font-bold text-red-100/85">Meses com dados: {client.points}</p>
