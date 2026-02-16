@@ -31,6 +31,7 @@ import KPICard from './components/KPICard';
 import { FinancialCharts } from './components/Charts';
 import { ConfigurationsPanel } from './components/ConfigurationsPanel';
 import { DiagnosisPanel } from './components/DiagnosisPanel';
+import { StrategicInsightsPanel } from './components/StrategicInsightsPanel';
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -230,6 +231,14 @@ function App() {
         </div>
 
         <FinancialCharts data={financialHistory} privacyMode={privacyMode} />
+
+        <StrategicInsightsPanel
+          contracts={contracts}
+          monthlyResults={monthlyResults}
+          costs={costs}
+          settings={settings}
+          selectedMonth={selectedMonth}
+        />
 
         <div className="relative">
           <div className="pointer-events-none absolute -top-10 inset-x-0 -z-10 h-20 bg-gradient-to-b from-transparent to-slate-900/50"></div>

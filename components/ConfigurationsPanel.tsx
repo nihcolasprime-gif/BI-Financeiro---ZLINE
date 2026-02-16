@@ -193,7 +193,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                         <div className="relative">
                              <div className="absolute top-0 right-0 bg-indigo-100 text-indigo-600 text-[9px] font-bold px-2 py-1 rounded-lg uppercase">Mês: {selectedMonth}</div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Investimento em Ads (R$)</label>
-                            <input type="number" value={localAdSpend} onChange={e => setLocalAdSpend(parseFloat(e.target.value))} className="w-full p-4 bg-indigo-50 rounded-2xl text-lg font-black text-indigo-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" />
+                            <input type="number" value={localAdSpend} onChange={e => setLocalAdSpend(e.target.value === '' ? 0 : parseFloat(e.target.value))} className="w-full p-4 bg-indigo-50 rounded-2xl text-lg font-black text-indigo-700 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" />
                         </div>
                     </div>
                 </div>
@@ -282,11 +282,11 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
                                                 <label className="text-[10px] font-bold text-indigo-400 uppercase mb-1 block">Setup Fee (Taxa Única)</label>
-                                                <input type="number" value={editingContract.UIZ_Setup_Fee || 0} onChange={e => setEditingContract({...editingContract, UIZ_Setup_Fee: parseFloat(e.target.value)})} className="w-full p-3 bg-white rounded-xl text-sm font-bold outline-none text-indigo-900" />
+                                                <input type="number" value={editingContract.UIZ_Setup_Fee ?? ''} onChange={e => setEditingContract({...editingContract, UIZ_Setup_Fee: e.target.value === '' ? undefined : parseFloat(e.target.value)})} className="w-full p-3 bg-white rounded-xl text-sm font-bold outline-none text-indigo-900" />
                                             </div>
                                             <div>
                                                 <label className="text-[10px] font-bold text-indigo-400 uppercase mb-1 block">Valor Mensal (Recorrente)</label>
-                                                <input type="number" value={editingContract.UIZ_Valor_Mensal || 0} onChange={e => setEditingContract({...editingContract, UIZ_Valor_Mensal: parseFloat(e.target.value)})} className="w-full p-3 bg-white rounded-xl text-sm font-bold outline-none text-indigo-900" />
+                                                <input type="number" value={editingContract.UIZ_Valor_Mensal ?? ''} onChange={e => setEditingContract({...editingContract, UIZ_Valor_Mensal: e.target.value === '' ? undefined : parseFloat(e.target.value)})} className="w-full p-3 bg-white rounded-xl text-sm font-bold outline-none text-indigo-900" />
                                             </div>
                                             <div className="col-span-2">
                                                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Data de Início</label>
@@ -305,7 +305,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                                             </div>
                                             <div>
                                                 <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Valor Sugerido</label>
-                                                <input type="number" value={editingContract.Valor_Sugerido_Renovacao || 0} onChange={e => setEditingContract({...editingContract, Valor_Sugerido_Renovacao: parseFloat(e.target.value)})} className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold outline-none" />
+                                                <input type="number" value={editingContract.Valor_Sugerido_Renovacao ?? ''} onChange={e => setEditingContract({...editingContract, Valor_Sugerido_Renovacao: e.target.value === '' ? undefined : parseFloat(e.target.value)})} className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold outline-none" />
                                             </div>
                                         </div>
                                     )}
@@ -409,8 +409,8 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                                             <span className="absolute left-4 top-4 text-slate-400 text-sm font-bold">R$</span>
                                             <input 
                                                 type="number" 
-                                                value={editingResult.Receita_Mensal_BRL || 0} 
-                                                onChange={e => setEditingResult({...editingResult, Receita_Mensal_BRL: parseFloat(e.target.value)})}
+                                                value={editingResult.Receita_Mensal_BRL ?? ''} 
+                                                onChange={e => setEditingResult({...editingResult, Receita_Mensal_BRL: e.target.value === '' ? 0 : parseFloat(e.target.value)})}
                                                 className="w-full p-4 pl-10 bg-slate-50 rounded-2xl text-xl font-black text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500/20" 
                                             />
                                         </div>
@@ -485,7 +485,7 @@ export const ConfigurationsPanel: React.FC<ConfigurationsPanelProps> = ({
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Valor (R$)</label>
-                                <input type="number" value={editingCost.Valor_Mensal_BRL || 0} onChange={e => setEditingCost({...editingCost, Valor_Mensal_BRL: parseFloat(e.target.value)})} className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold outline-none text-rose-600" />
+                                <input type="number" value={editingCost.Valor_Mensal_BRL ?? ''} onChange={e => setEditingCost({...editingCost, Valor_Mensal_BRL: e.target.value === '' ? 0 : parseFloat(e.target.value)})} className="w-full p-3 bg-slate-50 rounded-xl text-sm font-bold outline-none text-rose-600" />
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Categoria</label>
