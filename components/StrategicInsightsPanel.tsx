@@ -128,10 +128,10 @@ export const StrategicInsightsPanel: React.FC<StrategicInsightsPanelProps> = ({
     <section className="glass-panel rounded-[32px] border border-white/30 p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-cyan-200">Analytics Estratégico</p>
-          <h2 className="text-xl font-black text-white">Rentabilidade, segmentos e valor ideal de contrato</h2>
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-rose-300">Analytics Estratégico</p>
+          <h2 className="text-xl font-black text-rose-50">Rentabilidade, segmentos e valor ideal de contrato</h2>
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-white/20 bg-black/20 px-3 py-2 text-[11px] font-bold text-cyan-100">
+        <div className="flex items-center gap-2 rounded-xl border border-white/20 bg-black/20 px-3 py-2 text-[11px] font-bold text-rose-100">
           <BarChart3 size={14} /> Competência {selectedMonth}
         </div>
       </div>
@@ -143,8 +143,8 @@ export const StrategicInsightsPanel: React.FC<StrategicInsightsPanelProps> = ({
             onClick={() => setActiveTab(tab.key)}
             className={`rounded-xl border px-3 py-2 text-[11px] font-black uppercase tracking-wide transition-all ${
               activeTab === tab.key
-                ? 'border-cyan-300/50 bg-cyan-300/15 text-cyan-100'
-                : 'border-white/20 bg-white/5 text-slate-200 hover:bg-white/10'
+                ? 'border-rose-300/50 bg-rose-500/20 text-rose-100'
+                : 'border-white/20 bg-white/5 text-rose-100/85 hover:bg-white/10'
             }`}
           >
             <span className="flex items-center justify-center gap-2">{tab.icon} {tab.label}</span>
@@ -156,9 +156,9 @@ export const StrategicInsightsPanel: React.FC<StrategicInsightsPanelProps> = ({
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           {Object.entries(analytics.segmentBase).map(([segment, data]) => (
             <article key={segment} className="rounded-2xl border border-white/20 bg-white/10 p-4">
-              <p className="text-[11px] font-black uppercase text-cyan-100/90">{segment}</p>
-              <p className="mt-2 text-2xl font-black text-white">{data.count}</p>
-              <p className="text-xs font-semibold text-slate-200">Receita no mês: {formatCurrency(data.revenue)}</p>
+              <p className="text-[11px] font-black uppercase text-rose-100/90">{segment}</p>
+              <p className="mt-2 text-2xl font-black text-rose-50">{data.count}</p>
+              <p className="text-xs font-semibold text-rose-100/85">Receita no mês: {formatCurrency(data.revenue)}</p>
             </article>
           ))}
         </div>
@@ -168,10 +168,10 @@ export const StrategicInsightsPanel: React.FC<StrategicInsightsPanelProps> = ({
         <div className="space-y-2">
           {analytics.lossClients.slice(0, 8).map((item) => (
             <article key={item.client} className="grid grid-cols-1 gap-2 rounded-2xl border border-white/20 bg-white/10 p-4 text-xs md:grid-cols-5">
-              <p className="font-black text-white md:col-span-2">{item.client} <span className="font-semibold text-cyan-200/80">• {item.segment}</span></p>
-              <p className="font-bold text-slate-200">Receita: {formatCurrency(item.revenue)}</p>
-              <p className="font-bold text-slate-200">Custo médio: {formatCurrency(item.avgCostShare)}</p>
-              <p className={`font-black ${item.profit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+              <p className="font-black text-rose-50 md:col-span-2">{item.client} <span className="font-semibold text-rose-300/80">• {item.segment}</span></p>
+              <p className="font-bold text-rose-100/85">Receita: {formatCurrency(item.revenue)}</p>
+              <p className="font-bold text-rose-100/85">Custo médio: {formatCurrency(item.avgCostShare)}</p>
+              <p className={`font-black ${item.profit >= 0 ? 'text-rose-100' : 'text-rose-300'}`}>
                 {item.profit >= 0 ? 'Lucro' : 'Prejuízo'}: {formatCurrency(item.profit)}
               </p>
             </article>
@@ -182,17 +182,17 @@ export const StrategicInsightsPanel: React.FC<StrategicInsightsPanelProps> = ({
       {activeTab === 'custos' && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <article className="rounded-2xl border border-white/20 bg-white/10 p-4">
-            <p className="text-[11px] font-black uppercase text-cyan-100">Custo médio por cliente</p>
-            <p className="mt-2 text-2xl font-black text-white">{formatCurrency(analytics.avgCostPerClient)}</p>
+            <p className="text-[11px] font-black uppercase text-rose-100">Custo médio por cliente</p>
+            <p className="mt-2 text-2xl font-black text-rose-50">{formatCurrency(analytics.avgCostPerClient)}</p>
           </article>
           <article className="rounded-2xl border border-white/20 bg-white/10 p-4">
-            <p className="text-[11px] font-black uppercase text-cyan-100">Valor real médio</p>
-            <p className="mt-2 text-2xl font-black text-white">{formatCurrency(analytics.averageRevenuePerClient)}</p>
+            <p className="text-[11px] font-black uppercase text-rose-100">Valor real médio</p>
+            <p className="mt-2 text-2xl font-black text-rose-50">{formatCurrency(analytics.averageRevenuePerClient)}</p>
           </article>
           <article className="rounded-2xl border border-white/20 bg-white/10 p-4">
-            <p className="text-[11px] font-black uppercase text-cyan-100">Valor ideal médio</p>
-            <p className="mt-2 text-2xl font-black text-white">{formatCurrency(analytics.idealContractValue)}</p>
-            <p className={`mt-2 text-xs font-bold ${analytics.monthlyImpact <= 0 ? 'text-emerald-300' : 'text-amber-200'}`}>
+            <p className="text-[11px] font-black uppercase text-rose-100">Valor ideal médio</p>
+            <p className="mt-2 text-2xl font-black text-rose-50">{formatCurrency(analytics.idealContractValue)}</p>
+            <p className={`mt-2 text-xs font-bold ${analytics.monthlyImpact <= 0 ? 'text-rose-100' : 'text-rose-300'}`}>
               Impacto estimado: {formatCurrency(analytics.monthlyImpact)} / mês
             </p>
           </article>
@@ -203,10 +203,10 @@ export const StrategicInsightsPanel: React.FC<StrategicInsightsPanelProps> = ({
         <div className="space-y-2">
           {analytics.clientsEvolution.slice(0, 10).map((client) => (
             <article key={client.client} className="grid grid-cols-1 gap-2 rounded-2xl border border-white/20 bg-white/10 p-4 text-xs md:grid-cols-4">
-              <p className="font-black text-white">{client.client}</p>
-              <p className="font-bold text-slate-200">Média: {formatCurrency(client.average)}</p>
-              <p className="font-bold text-slate-200">Meses com dados: {client.points}</p>
-              <p className={`font-black ${client.trend >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+              <p className="font-black text-rose-50">{client.client}</p>
+              <p className="font-bold text-rose-100/85">Média: {formatCurrency(client.average)}</p>
+              <p className="font-bold text-rose-100/85">Meses com dados: {client.points}</p>
+              <p className={`font-black ${client.trend >= 0 ? 'text-rose-100' : 'text-rose-300'}`}>
                 Tendência: {formatPercent(client.trend)}
               </p>
             </article>

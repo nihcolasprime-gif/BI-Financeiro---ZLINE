@@ -28,7 +28,7 @@ export const FinancialCharts: React.FC<ChartsProps> = ({ data, privacyMode }) =>
     if (active && payload && payload.length) {
       return (
         <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-slate-700">
-          <p className="font-bold text-xs uppercase tracking-widest mb-2 text-slate-400">{label}</p>
+          <p className="font-bold text-xs uppercase tracking-widest mb-2 text-rose-100/70">{label}</p>
           {payload.map((entry: any, index: number) => (
             <div key={index} className="flex items-center gap-2 text-xs font-bold mb-1">
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div>
@@ -46,11 +46,11 @@ export const FinancialCharts: React.FC<ChartsProps> = ({ data, privacyMode }) =>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
       
       {/* GRÁFICO 1: COMPOSIÇÃO DE RECEITA (UI-Z vs AGÊNCIA) */}
-      <div className="glass-panel p-6 rounded-[32px] border border-slate-100 shadow-xl bg-white/50 backdrop-blur-md">
+      <div className="glass-panel p-6 rounded-[32px] border border-rose-300/20 shadow-xl bg-black/35 backdrop-blur-xl">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Fontes de Receita</h3>
-            <p className="text-[10px] text-slate-400 font-bold">Agência (Serviço) vs UI-Z (Recorrência)</p>
+            <h3 className="text-xs font-black text-rose-100 uppercase tracking-widest">Fontes de Receita</h3>
+            <p className="text-[10px] text-rose-100/70 font-bold">Agência (Serviço) vs UI-Z (Recorrência)</p>
           </div>
         </div>
         
@@ -60,18 +60,18 @@ export const FinancialCharts: React.FC<ChartsProps> = ({ data, privacyMode }) =>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis 
                 dataKey="month" 
-                tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} 
+                tick={{ fontSize: 10, fill: '#fecdd3', fontWeight: 700 }} 
                 axisLine={false} 
                 tickLine={false} 
               />
               <YAxis 
                 hide={privacyMode} 
-                tick={{ fontSize: 10, fill: '#94a3b8' }} 
+                tick={{ fontSize: 10, fill: '#fecdd3' }} 
                 axisLine={false} 
                 tickLine={false}
                 tickFormatter={(value) => `${value / 1000}k`}
               />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9', radius: 8 }} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(127,29,29,0.25)', radius: 8 }} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }} />
               
               {/* Barras Empilhadas (StackId igual empilha uma na outra) */}
@@ -79,7 +79,7 @@ export const FinancialCharts: React.FC<ChartsProps> = ({ data, privacyMode }) =>
                 name="Agência" 
                 dataKey="agencyRevenue" 
                 stackId="a" 
-                fill="#cbd5e1" // Cinza (Base)
+                fill="#2b1116" // Cinza (Base)
                 radius={[0, 0, 4, 4]} 
                 barSize={32}
               />
@@ -87,7 +87,7 @@ export const FinancialCharts: React.FC<ChartsProps> = ({ data, privacyMode }) =>
                 name="UI-Z (SaaS)" 
                 dataKey="uizRevenue" 
                 stackId="a" 
-                fill="#4f46e5" // Indigo (Destaque Tech)
+                fill="#ef4444" // Indigo (Destaque Tech)
                 radius={[4, 4, 0, 0]} 
                 barSize={32}
               />
@@ -97,11 +97,11 @@ export const FinancialCharts: React.FC<ChartsProps> = ({ data, privacyMode }) =>
       </div>
 
       {/* GRÁFICO 2: SAÚDE FINANCEIRA (LUCRO vs CUSTOS) */}
-      <div className="glass-panel p-6 rounded-[32px] border border-slate-100 shadow-xl bg-white/50 backdrop-blur-md">
+      <div className="glass-panel p-6 rounded-[32px] border border-rose-300/20 shadow-xl bg-black/35 backdrop-blur-xl">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Saúde Financeira</h3>
-            <p className="text-[10px] text-slate-400 font-bold">Faturamento vs Custos</p>
+            <h3 className="text-xs font-black text-rose-100 uppercase tracking-widest">Saúde Financeira</h3>
+            <p className="text-[10px] text-rose-100/70 font-bold">Faturamento vs Custos</p>
           </div>
         </div>
 
@@ -110,20 +110,20 @@ export const FinancialCharts: React.FC<ChartsProps> = ({ data, privacyMode }) =>
             <ComposedChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.1}/>
+                  <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis 
                 dataKey="month" 
-                tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 700 }} 
+                tick={{ fontSize: 10, fill: '#fecdd3', fontWeight: 700 }} 
                 axisLine={false} 
                 tickLine={false} 
               />
               <YAxis 
                 hide={privacyMode} 
-                tick={{ fontSize: 10, fill: '#94a3b8' }} 
+                tick={{ fontSize: 10, fill: '#fecdd3' }} 
                 axisLine={false} 
                 tickLine={false}
                 tickFormatter={(value) => `${value / 1000}k`}
@@ -136,7 +136,7 @@ export const FinancialCharts: React.FC<ChartsProps> = ({ data, privacyMode }) =>
                 type="monotone" 
                 dataKey="totalRevenue" 
                 name="Receita Total" 
-                stroke="#10b981" 
+                stroke="#f43f5e" 
                 strokeWidth={3}
                 fillOpacity={1} 
                 fill="url(#colorRevenue)" 
