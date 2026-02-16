@@ -22,7 +22,8 @@ import {
   INITIAL_CONTRACTS,
   INITIAL_GROWTH_DATA,
   INITIAL_MONTHLY_RESULTS,
-  MONTHS
+  MONTHS,
+  STANDARD_MONTHS
 } from './constants';
 import { calculateSimulation } from './utils/configAudit';
 import { fetchDashboardData } from './database';
@@ -38,6 +39,8 @@ function App() {
   const [privacyMode, setPrivacyMode] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[0]);
   const [availableMonths, setAvailableMonths] = useState<string[]>(MONTHS);
+  const [rangeStartMonth, setRangeStartMonth] = useState<string>([...MONTHS].reverse()[0]);
+  const [rangeEndMonth, setRangeEndMonth] = useState<string>(MONTHS[0]);
 
   const [contracts, setContracts] = useState<ClientContract[]>([]);
   const [monthlyResults, setMonthlyResults] = useState<ClientMonthlyResult[]>([]);
@@ -74,15 +77,57 @@ function App() {
     loadData();
   }, []);
 
+
+  const monthOrder = (monthLabel: string) => {
+    const [monthName, yearStr] = monthLabel.split('/');
+    const monthIndex = STANDARD_MONTHS.indexOf(`${monthName}/2026`);
+    const year = Number(yearStr);
+    if (monthIndex < 0 || Number.isNaN(year)) return -1;
+    return year * 12 + monthIndex;
+  };
+
+  const chronologicalMonths = useMemo(
+    () => [...availableMonths].sort((a, b) => monthOrder(a) - monthOrder(b)),
+    [availableMonths]
+  );
+
+  useEffect(() => {
+    if (!chronologicalMonths.length) return;
+
+    if (!chronologicalMonths.includes(rangeStartMonth)) {
+      setRangeStartMonth(chronologicalMonths[0]);
+    }
+
+    if (!chronologicalMonths.includes(rangeEndMonth)) {
+      setRangeEndMonth(chronologicalMonths[chronologicalMonths.length - 1]);
+    }
+
+    if (!chronologicalMonths.includes(selectedMonth)) {
+      setSelectedMonth(chronologicalMonths[chronologicalMonths.length - 1]);
+    }
+  }, [chronologicalMonths, rangeStartMonth, rangeEndMonth, selectedMonth]);
+
+  const selectedRangeMonths = useMemo(() => {
+    const startOrder = monthOrder(rangeStartMonth);
+    const endOrder = monthOrder(rangeEndMonth);
+    if (startOrder < 0 || endOrder < 0) return [];
+
+    const minOrder = Math.min(startOrder, endOrder);
+    const maxOrder = Math.max(startOrder, endOrder);
+
+    return chronologicalMonths.filter((month) => {
+      const order = monthOrder(month);
+      return order >= minOrder && order <= maxOrder;
+    });
+  }, [rangeStartMonth, rangeEndMonth, chronologicalMonths]);
+
   const currentSimulation = useMemo(
     () => calculateSimulation(selectedMonth, contracts, monthlyResults, costs, settings, []),
     [selectedMonth, contracts, monthlyResults, costs, settings]
   );
 
   const financialHistory = useMemo(() => {
-    const chronologicalMonths = [...MONTHS].reverse();
-
-    return chronologicalMonths.map((month) => {
+    return selectedRangeMonths.map((month) => {
       const sim = calculateSimulation(month, contracts, monthlyResults, costs, settings, []);
 
       let uizRevenue = 0;
@@ -105,7 +150,7 @@ function App() {
         accumulatedCash: sim.kpis.netResult
       };
     });
-  }, [contracts, monthlyResults, costs, settings]);
+  }, [contracts, monthlyResults, costs, settings, selectedRangeMonths]);
 
   if (loading) {
     return (
@@ -118,7 +163,20 @@ function App() {
     );
   }
 
-  const kpis = currentSimulation.kpis;
+  const rangeKpis = selectedRangeMonths.reduce(
+    (acc, month) => {
+      const sim = calculateSimulation(month, contracts, monthlyResults, costs, settings, []);
+      acc.grossRevenue += sim.kpis.grossRevenue;
+      acc.realizedRevenue += sim.kpis.realizedRevenue;
+      acc.totalCost += sim.kpis.totalCost;
+      acc.netResult += sim.kpis.netResult;
+      acc.churn += sim.kpis.churn;
+      return acc;
+    },
+    { grossRevenue: 0, realizedRevenue: 0, totalCost: 0, netResult: 0, churn: 0 }
+  );
+
+  const kpis = rangeKpis;
   const margin = kpis.grossRevenue > 0 ? kpis.netResult / kpis.grossRevenue : 0;
 
   return (
@@ -147,23 +205,50 @@ function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 rounded-2xl border border-red-500/30 bg-black/30 p-1.5 backdrop-blur-xl">
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-red-500/30 bg-black/30 p-1.5 backdrop-blur-xl">
+            <div className="group relative">
+              <select
+                value={rangeStartMonth}
+                onChange={(e) => setRangeStartMonth(e.target.value)}
+                className="min-w-[128px] cursor-pointer appearance-none rounded-xl border border-red-500/35 bg-black/25 py-2 pl-3 pr-9 text-[11px] font-black uppercase tracking-wide text-red-50 outline-none transition-all focus:border-red-500"
+              >
+                {chronologicalMonths.map((month) => (
+                  <option key={`start-${month}`} value={month} className="text-black">
+                    Início: {month}
+                  </option>
+                ))}
+              </select>
+              <Calendar size={12} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-red-100/80" />
+            </div>
+
+            <div className="group relative">
+              <select
+                value={rangeEndMonth}
+                onChange={(e) => setRangeEndMonth(e.target.value)}
+                className="min-w-[128px] cursor-pointer appearance-none rounded-xl border border-red-500/35 bg-black/25 py-2 pl-3 pr-9 text-[11px] font-black uppercase tracking-wide text-red-50 outline-none transition-all focus:border-red-500"
+              >
+                {chronologicalMonths.map((month) => (
+                  <option key={`end-${month}`} value={month} className="text-black">
+                    Fim: {month}
+                  </option>
+                ))}
+              </select>
+              <Calendar size={12} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-red-100/80" />
+            </div>
+
             <div className="group relative">
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="min-w-[140px] cursor-pointer appearance-none rounded-xl border border-red-500/35 bg-black/25 py-2 pl-4 pr-10 text-xs font-black uppercase tracking-wide text-red-50 outline-none transition-all focus:border-red-500"
+                className="min-w-[128px] cursor-pointer appearance-none rounded-xl border border-red-500/35 bg-black/25 py-2 pl-3 pr-9 text-[11px] font-black uppercase tracking-wide text-red-50 outline-none transition-all focus:border-red-500"
               >
-                {availableMonths.map((month) => (
+                {chronologicalMonths.map((month) => (
                   <option key={month} value={month} className="text-black">
-                    {month}
+                    Operação: {month}
                   </option>
                 ))}
               </select>
-              <Calendar
-                size={14}
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-red-100/80"
-              />
+              <Calendar size={12} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-red-100/80" />
             </div>
 
             <div className="mx-1 h-6 w-px bg-red-500/40"></div>
@@ -193,6 +278,10 @@ function App() {
           netResult={kpis.netResult}
           margin={margin}
         />
+
+        <div className="rounded-xl border border-red-500/30 bg-black/25 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-red-100/85">
+          Visão Financeira: {selectedRangeMonths[0] || '-'} até {selectedRangeMonths[selectedRangeMonths.length - 1] || '-'}
+        </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <KPICard
