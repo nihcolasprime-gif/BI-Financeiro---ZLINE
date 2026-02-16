@@ -131,7 +131,7 @@ function App() {
       <div className="frost-layer-1" />
       <div className="frost-layer-2" />
 
-      <nav className="sticky top-0 z-40 mb-8 border-b border-white/20 bg-black/50 px-6 py-4 backdrop-blur-xl">
+      <nav className="sticky top-0 z-40 mb-8 border-b border-red-500/25 bg-black/45 px-6 py-4 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 md:flex-row">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-red-600/20 p-2 shadow-lg shadow-red-600/25 border border-red-500/40">
@@ -152,7 +152,7 @@ function App() {
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="min-w-[140px] cursor-pointer appearance-none rounded-xl border border-white/30 bg-black/20 py-2 pl-4 pr-10 text-xs font-black uppercase tracking-wide text-red-50 outline-none transition-all focus:border-red-500"
+                className="min-w-[140px] cursor-pointer appearance-none rounded-xl border border-red-500/35 bg-black/25 py-2 pl-4 pr-10 text-xs font-black uppercase tracking-wide text-red-50 outline-none transition-all focus:border-red-500"
               >
                 {availableMonths.map((month) => (
                   <option key={month} value={month} className="text-black">
