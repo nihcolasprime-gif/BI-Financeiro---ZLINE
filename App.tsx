@@ -27,6 +27,7 @@ import {
 } from './constants';
 import { calculateSimulation } from './utils/configAudit';
 import { fetchDashboardData } from './database';
+import { isSupabaseEnabled, supabaseConnectionHint } from './lib/supabase';
 
 import KPICard from './components/KPICard';
 import { FinancialCharts } from './components/Charts';
@@ -267,6 +268,16 @@ function App() {
           </div>
         </div>
       </nav>
+
+
+
+      {!isSupabaseEnabled && (
+        <div className="relative z-20 mx-auto mb-6 max-w-7xl px-6">
+          <div className="rounded-2xl border border-red-500/40 bg-black/45 p-3 text-[11px] font-bold text-red-100">
+            Supabase desconectado: {supabaseConnectionHint || 'configure URL/API key válidas no ambiente.'}
+          </div>
+        </div>
+      )}
 
       <main className="relative z-10 mx-auto max-w-7xl space-y-8 px-6">
         <DiagnosisPanel
