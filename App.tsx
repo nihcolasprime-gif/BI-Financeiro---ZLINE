@@ -1,226 +1,347 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  LayoutDashboard, Lock, Unlock, TrendingUp, DollarSign, 
-  Wallet, PieChart, AlertCircle, Calendar 
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Calendar,
+  DollarSign,
+  LayoutDashboard,
+  Lock,
+  PieChart,
+  TrendingUp,
+  Unlock,
+  Wallet
 } from 'lucide-react';
 
-// Tipos e Constantes
-import { 
-  ClientContract, ClientMonthlyResult, CostData, 
-  GlobalSettings, MonthlyGrowthData 
+import {
+  ClientContract,
+  ClientMonthlyResult,
+  CostData,
+  GlobalSettings,
+  MonthlyGrowthData
 } from './types';
-import { MONTHS, INITIAL_CONTRACTS, INITIAL_MONTHLY_RESULTS, ALL_COSTS, INITIAL_GROWTH_DATA } from './constants';
+import {
+  ALL_COSTS,
+  INITIAL_CONTRACTS,
+  INITIAL_GROWTH_DATA,
+  INITIAL_MONTHLY_RESULTS,
+  MONTHS,
+  STANDARD_MONTHS
+} from './constants';
 import { calculateSimulation } from './utils/configAudit';
-
-// Banco de Dados
 import { fetchDashboardData } from './database';
+import { isSupabaseEnabled, supabaseConnectionHint } from './lib/supabase';
 
-// Componentes
 import KPICard from './components/KPICard';
 import { FinancialCharts } from './components/Charts';
 import { ConfigurationsPanel } from './components/ConfigurationsPanel';
+import { DiagnosisPanel } from './components/DiagnosisPanel';
+import { StrategicInsightsPanel } from './components/StrategicInsightsPanel';
 
 function App() {
-  // --- ESTADOS GLOBAIS ---
   const [loading, setLoading] = useState(true);
   const [privacyMode, setPrivacyMode] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[0]); // Pega o mês mais recente
+  const [selectedMonth, setSelectedMonth] = useState<string>(MONTHS[0]);
   const [availableMonths, setAvailableMonths] = useState<string[]>(MONTHS);
+  const [rangeStartMonth, setRangeStartMonth] = useState<string>([...MONTHS].reverse()[0]);
+  const [rangeEndMonth, setRangeEndMonth] = useState<string>(MONTHS[0]);
 
-  // Dados do Sistema
   const [contracts, setContracts] = useState<ClientContract[]>([]);
   const [monthlyResults, setMonthlyResults] = useState<ClientMonthlyResult[]>([]);
   const [costs, setCosts] = useState<CostData[]>([]);
   const [growthData, setGrowthData] = useState<MonthlyGrowthData[]>([]);
   const [settings, setSettings] = useState<GlobalSettings>({
-    taxRate: 0.10, // 10% Padrão
-    targetMargin: 0.50, // 50% Margem
+    taxRate: 0.1,
+    targetMargin: 0.5,
     maxProductionCapacity: 40,
-    benchmarks: { maxChurn: 0.05, minMargin: 0.30, minLtvCac: 3 }
+    benchmarks: { maxChurn: 0.05, minMargin: 0.3, minLtvCac: 3 }
   });
 
-  // --- 1. CARREGAMENTO INICIAL (SUPABASE) ---
   useEffect(() => {
     const loadData = async () => {
       const dbData = await fetchDashboardData();
-      
+
       if (dbData) {
-        // Se o banco retornou algo, usa. Se vier vazio [], usa vazio mesmo.
         setContracts(dbData.contracts);
         setMonthlyResults(dbData.monthlyResults);
         setCosts(dbData.costs);
         if (dbData.settings) setSettings(dbData.settings);
         setGrowthData(dbData.growthData);
       } else {
-        // Fallback de segurança (muito raro cair aqui se o .env estiver certo)
-        console.warn("Usando fallback local (Falha na conexão)");
+        console.warn('Usando fallback local (Falha na conexão)');
         setContracts(INITIAL_CONTRACTS);
         setMonthlyResults(INITIAL_MONTHLY_RESULTS);
         setCosts(ALL_COSTS);
         setGrowthData(INITIAL_GROWTH_DATA);
       }
+
       setLoading(false);
     };
 
     loadData();
   }, []);
 
-  // --- 2. CÁLCULOS EM TEMPO REAL ---
 
-  // A. Simulação do Mês Selecionado (Para os Cards do Topo)
-  const currentSimulation = useMemo(() => {
-    return calculateSimulation(
-      selectedMonth,
-      contracts,
-      monthlyResults,
-      costs,
-      settings,
-      [] // Futuro: passar resultados anteriores para cálculo de churn exato
-    );
-  }, [selectedMonth, contracts, monthlyResults, costs, settings]);
+  const monthOrder = (monthLabel: string) => {
+    const [monthName, yearStr] = monthLabel.split('/');
+    const monthIndex = STANDARD_MONTHS.indexOf(`${monthName}/2026`);
+    const year = Number(yearStr);
+    if (monthIndex < 0 || Number.isNaN(year)) return -1;
+    return year * 12 + monthIndex;
+  };
 
-  // B. Histórico Financeiro Completo (Para os Gráficos)
+  const chronologicalMonths = useMemo(
+    () => [...availableMonths].sort((a, b) => monthOrder(a) - monthOrder(b)),
+    [availableMonths]
+  );
+
+  useEffect(() => {
+    if (!chronologicalMonths.length) return;
+
+    if (!chronologicalMonths.includes(rangeStartMonth)) {
+      setRangeStartMonth(chronologicalMonths[0]);
+    }
+
+    if (!chronologicalMonths.includes(rangeEndMonth)) {
+      setRangeEndMonth(chronologicalMonths[chronologicalMonths.length - 1]);
+    }
+
+    if (!chronologicalMonths.includes(selectedMonth)) {
+      setSelectedMonth(chronologicalMonths[chronologicalMonths.length - 1]);
+    }
+  }, [chronologicalMonths, rangeStartMonth, rangeEndMonth, selectedMonth]);
+
+  const selectedRangeMonths = useMemo(() => {
+    const startOrder = monthOrder(rangeStartMonth);
+    const endOrder = monthOrder(rangeEndMonth);
+    if (startOrder < 0 || endOrder < 0) return [];
+
+    const minOrder = Math.min(startOrder, endOrder);
+    const maxOrder = Math.max(startOrder, endOrder);
+
+    return chronologicalMonths.filter((month) => {
+      const order = monthOrder(month);
+      return order >= minOrder && order <= maxOrder;
+    });
+  }, [rangeStartMonth, rangeEndMonth, chronologicalMonths]);
+
+  const currentSimulation = useMemo(
+    () => calculateSimulation(selectedMonth, contracts, monthlyResults, costs, settings, []),
+    [selectedMonth, contracts, monthlyResults, costs, settings]
+  );
+
   const financialHistory = useMemo(() => {
-    // Vamos calcular mês a mês para plotar o gráfico de evolução
-    // Revertemos MONTHS para ficar cronológico (Jan -> Dez) no gráfico
-    const cronologicalMonths = [...MONTHS].reverse(); 
-
-    return cronologicalMonths.map(month => {
+    return selectedRangeMonths.map((month) => {
       const sim = calculateSimulation(month, contracts, monthlyResults, costs, settings, []);
-      
-      // AQUI ESTÁ O PULO DO GATO: SEPARAR UI-Z DE AGÊNCIA
+
       let uizRevenue = 0;
       let agencyRevenue = 0;
 
-      sim.clients.forEach(client => {
-        // Receita considerada para o gráfico (Realizada se tiver, Projetada se não)
+      sim.clients.forEach((client) => {
         const revenue = client.Receita_Mensal_BRL || 0;
-        
-        if (client.Tipo_Servico === 'UI-Z') {
-          uizRevenue += revenue;
-        } else {
-          agencyRevenue += revenue;
-        }
+        if (client.Tipo_Servico === 'UI-Z') uizRevenue += revenue;
+        else agencyRevenue += revenue;
       });
 
       return {
-        month: month.split('/')[0], // "Jan" em vez de "Jan/2026" pra caber no gráfico
+        month: month.split('/')[0],
         fullMonth: month,
         agencyRevenue,
         uizRevenue,
         totalRevenue: sim.kpis.grossRevenue,
         totalCost: sim.kpis.totalCost,
         netResult: sim.kpis.netResult,
-        accumulatedCash: sim.kpis.netResult // Simplificado
+        accumulatedCash: sim.kpis.netResult
       };
     });
-  }, [contracts, monthlyResults, costs, settings]);
-
-  // --- 3. RENDERIZAÇÃO ---
+  }, [contracts, monthlyResults, costs, settings, selectedRangeMonths]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center flex-col gap-4">
-        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">Carregando Z-Line BI...</p>
+      <div className="min-h-screen bg-black flex items-center justify-center flex-col gap-4">
+        <div className="w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-red-100/80 font-bold text-xs uppercase tracking-widest animate-pulse">
+          Carregando Z-Line BI...
+        </p>
       </div>
     );
   }
 
-  const kpis = currentSimulation.kpis;
-  const margin = kpis.grossRevenue > 0 ? (kpis.netResult / kpis.grossRevenue) : 0;
+  const rangeKpis = selectedRangeMonths.reduce(
+    (acc, month) => {
+      const sim = calculateSimulation(month, contracts, monthlyResults, costs, settings, []);
+      acc.grossRevenue += sim.kpis.grossRevenue;
+      acc.realizedRevenue += sim.kpis.realizedRevenue;
+      acc.totalCost += sim.kpis.totalCost;
+      acc.netResult += sim.kpis.netResult;
+      acc.churn += sim.kpis.churn;
+      return acc;
+    },
+    { grossRevenue: 0, realizedRevenue: 0, totalCost: 0, netResult: 0, churn: 0 }
+  );
+
+  const kpis = rangeKpis;
+  const margin = kpis.grossRevenue > 0 ? kpis.netResult / kpis.grossRevenue : 0;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 pb-20">
-      
-      {/* HEADER / BARRA DE NAVEGAÇÃO */}
-      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 px-6 py-4 mb-8">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          
+    <div className="relative min-h-screen overflow-hidden bg-black pb-20 font-sans text-red-50 selection:bg-red-500/80 selection:text-black">
+      <div className="tech-layer" />
+      <div className="tech-grid" />
+      <div className="tech-orb tech-orb-left" />
+      <div className="tech-orb tech-orb-right" />
+
+      <div className="frost-layer-1" />
+      <div className="frost-layer-2" />
+
+      <nav className="sticky top-0 z-40 mb-8 border-b border-red-500/25 bg-black/45 px-6 py-4 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 md:flex-row">
           <div className="flex items-center gap-3">
-            <div className="bg-slate-900 p-2 rounded-xl">
-              <LayoutDashboard className="text-white" size={20} />
+            <div className="rounded-xl bg-red-600/20 p-2 shadow-lg shadow-red-600/25 border border-red-500/40">
+              <LayoutDashboard className="text-red-100" size={20} />
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-tighter text-slate-900">Z-LINE <span className="text-indigo-600">BI</span></h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Financial Intelligence</p>
+              <h1 className="text-lg font-black tracking-tighter text-white">
+                Z-LINE <span className="text-[#ff2400]">BI</span>
+              </h1>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-red-100/80">
+                Central de Performance • BI Operacional
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 bg-slate-100 p-1.5 rounded-2xl">
-            <div className="relative group">
-              <select 
-                value={selectedMonth} 
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="appearance-none bg-white pl-4 pr-10 py-2 rounded-xl text-xs font-black uppercase tracking-wide border border-slate-200 shadow-sm outline-none focus:border-indigo-500 cursor-pointer min-w-[140px]"
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-red-500/30 bg-black/30 p-1.5 backdrop-blur-xl">
+            <div className="group relative">
+              <select
+                value={rangeStartMonth}
+                onChange={(e) => setRangeStartMonth(e.target.value)}
+                className="min-w-[128px] cursor-pointer appearance-none rounded-xl border border-red-500/35 bg-black/25 py-2 pl-3 pr-9 text-[11px] font-black uppercase tracking-wide text-red-50 outline-none transition-all focus:border-red-500"
               >
-                {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
+                {chronologicalMonths.map((month) => (
+                  <option key={`start-${month}`} value={month} className="text-black">
+                    Início: {month}
+                  </option>
+                ))}
               </select>
-              <Calendar size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+              <Calendar size={12} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-red-100/80" />
             </div>
 
-            <div className="h-6 w-px bg-slate-300 mx-1"></div>
+            <div className="group relative">
+              <select
+                value={rangeEndMonth}
+                onChange={(e) => setRangeEndMonth(e.target.value)}
+                className="min-w-[128px] cursor-pointer appearance-none rounded-xl border border-red-500/35 bg-black/25 py-2 pl-3 pr-9 text-[11px] font-black uppercase tracking-wide text-red-50 outline-none transition-all focus:border-red-500"
+              >
+                {chronologicalMonths.map((month) => (
+                  <option key={`end-${month}`} value={month} className="text-black">
+                    Fim: {month}
+                  </option>
+                ))}
+              </select>
+              <Calendar size={12} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-red-100/80" />
+            </div>
 
-            <button 
+            <div className="group relative">
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="min-w-[128px] cursor-pointer appearance-none rounded-xl border border-red-500/35 bg-black/25 py-2 pl-3 pr-9 text-[11px] font-black uppercase tracking-wide text-red-50 outline-none transition-all focus:border-red-500"
+              >
+                {chronologicalMonths.map((month) => (
+                  <option key={month} value={month} className="text-black">
+                    Operação: {month}
+                  </option>
+                ))}
+              </select>
+              <Calendar size={12} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-red-100/80" />
+            </div>
+
+            <div className="mx-1 h-6 w-px bg-red-500/40"></div>
+
+            <button
               onClick={() => setPrivacyMode(!privacyMode)}
-              className={`p-2 rounded-xl transition-all ${privacyMode ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-slate-400 hover:text-slate-600 shadow-sm'}`}
+              className={`rounded-xl p-2 transition-all ${
+                privacyMode
+                  ? 'bg-red-600/30 text-red-100'
+                  : 'bg-black/20 text-red-100/80 shadow-sm hover:text-red-50'
+              }`}
               title="Modo Privacidade"
             >
               {privacyMode ? <Lock size={16} /> : <Unlock size={16} />}
             </button>
           </div>
-
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-6 space-y-8">
-        
-        {/* SEÇÃO 1: CARDS DE KPI */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KPICard 
-            title="Receita Bruta" 
-            value={kpis.grossRevenue} 
-            icon={<DollarSign size={20} />} 
+
+
+      {!isSupabaseEnabled && (
+        <div className="relative z-20 mx-auto mb-6 max-w-7xl px-6">
+          <div className="rounded-2xl border border-red-500/40 bg-black/45 p-3 text-[11px] font-bold text-red-100">
+            Supabase desconectado: {supabaseConnectionHint || 'configure URL/API key válidas no ambiente.'}
+          </div>
+        </div>
+      )}
+
+      <main className="relative z-10 mx-auto max-w-7xl space-y-8 px-6">
+        <DiagnosisPanel
+          contracts={contracts}
+          monthlyResults={monthlyResults}
+          costs={costs}
+          growthData={growthData}
+          selectedMonth={selectedMonth}
+          netResult={kpis.netResult}
+          margin={margin}
+        />
+
+        <div className="rounded-xl border border-red-500/30 bg-black/25 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-red-100/85">
+          Visão Financeira: {selectedRangeMonths[0] || '-'} até {selectedRangeMonths[selectedRangeMonths.length - 1] || '-'}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <KPICard
+            title="Receita Bruta"
+            value={kpis.grossRevenue}
+            icon={<DollarSign size={20} />}
             privacyMode={privacyMode}
             colorCondition="always-neutral"
-            subtitle="Faturamento Total Emitido"
+            subtitle="Faturamento emitido"
           />
-          <KPICard 
-            title="Receita Líquida" 
-            value={kpis.realizedRevenue} // Mostra o que realmente entrou (Pago)
-            icon={<Wallet size={20} />} 
+          <KPICard
+            title="Receita Líquida"
+            value={kpis.realizedRevenue}
+            icon={<Wallet size={20} />}
             privacyMode={privacyMode}
             colorCondition="positive-green"
-            subtitle="Caixa Realizado (Pago)"
+            subtitle="Caixa efetivamente recebido"
           />
-           <KPICard 
-            title="Custos Totais" 
-            value={kpis.totalCost} 
-            icon={<TrendingUp size={20} className="rotate-180"/>} 
+          <KPICard
+            title="Custos Totais"
+            value={kpis.totalCost}
+            icon={<TrendingUp size={20} className="rotate-180" />}
             privacyMode={privacyMode}
             colorCondition="cost-warning"
-            subtitle={`${costs.length} despesas lançadas`}
+            subtitle={`${costs.length} despesas cadastradas`}
           />
-          <KPICard 
-            title="Margem de Lucro" 
-            value={margin} 
+          <KPICard
+            title="Margem de Lucro"
+            value={margin}
             type="percent"
-            icon={<PieChart size={20} />} 
+            icon={<PieChart size={20} />}
             privacyMode={privacyMode}
             colorCondition={margin >= settings.targetMargin ? 'positive-green' : 'alert-low'}
-            subtitle={`Meta: ${(settings.targetMargin * 100).toFixed(0)}%`}
+            subtitle={`Meta atual: ${(settings.targetMargin * 100).toFixed(0)}%`}
           />
         </div>
 
-        {/* SEÇÃO 2: GRÁFICOS ESTRATÉGICOS */}
-        <FinancialCharts 
-          data={financialHistory} 
-          privacyMode={privacyMode} 
+        <FinancialCharts data={financialHistory} privacyMode={privacyMode} />
+
+        <StrategicInsightsPanel
+          contracts={contracts}
+          monthlyResults={monthlyResults}
+          costs={costs}
+          settings={settings}
+          selectedMonth={selectedMonth}
         />
 
-        {/* SEÇÃO 3: PAINEL DE CONTROLE */}
         <div className="relative">
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-50/50 pointer-events-none -z-10 h-20 -top-10"></div>
+          <div className="pointer-events-none absolute -top-10 inset-x-0 -z-10 h-20 bg-gradient-to-b from-transparent to-black/70"></div>
           <ConfigurationsPanel
             viewClients={currentSimulation.clients}
             contracts={contracts}
@@ -240,11 +361,10 @@ function App() {
             churn={kpis.churn}
           />
         </div>
-
       </main>
-      
-      <footer className="text-center py-12 text-slate-300 text-[10px] font-bold uppercase tracking-widest">
-        Z-Line Business Intelligence &copy; 2026 • Sistema Seguro
+
+      <footer className="relative z-10 py-12 text-center text-[10px] font-bold uppercase tracking-widest text-red-100/70">
+        Z-Line Business Intelligence © 2026 • Sistema Seguro
       </footer>
     </div>
   );

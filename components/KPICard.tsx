@@ -12,77 +12,65 @@ interface KPICardProps {
   onClick?: () => void;
 }
 
-const KPICard: React.FC<KPICardProps> = ({ 
-  title, 
-  value, 
-  icon, 
-  privacyMode = false, 
-  type = 'currency', 
-  colorCondition, 
+const KPICard: React.FC<KPICardProps> = ({
+  title,
+  value,
+  icon,
+  privacyMode = false,
+  type = 'currency',
+  colorCondition,
   subtitle,
-  onClick 
+  onClick
 }) => {
-  
-  // Lógica de Cores Dinâmicas
   const getValueColor = () => {
-    if (colorCondition === 'always-neutral') return 'text-slate-900';
-    if (colorCondition === 'cost-warning') return 'text-slate-900'; // Custos geralmente são neutros ou vermelhos se estourarem
-
-    // Lógica padrão (Quanto maior melhor, exceto Churn)
-    if (colorCondition === 'alert-low') {
-        // Para Churn: Se for > 0, é ruim (vermelho). Se for 0, é ótimo (verde).
-        return value > 0.05 ? 'text-rose-600' : 'text-emerald-600';
-    }
-    
-    // Para Receita/Lucro: Se for > 0 verde, < 0 vermelho
-    if (colorCondition === 'positive-green') return value >= 0 ? 'text-emerald-600' : 'text-rose-600';
-    if (colorCondition === 'negative-red') return value > 0 ? 'text-rose-600' : 'text-slate-900';
-
-    return 'text-slate-900';
+    if (colorCondition === 'always-neutral') return 'text-white';
+    if (colorCondition === 'cost-warning') return 'text-red-200';
+    if (colorCondition === 'alert-low') return 'text-[#ff2400]';
+    if (colorCondition === 'positive-green') return value >= 0 ? 'text-red-100' : 'text-[#ff2400]';
+    if (colorCondition === 'negative-red') return value > 0 ? 'text-[#ff2400]' : 'text-white';
+    return 'text-white';
   };
 
-  // Formatação do Valor
   const formattedValue = React.useMemo(() => {
     if (privacyMode) return '••••';
-    
+
     switch (type) {
-      case 'currency': return formatCurrency(value);
-      case 'percent': return formatPercent(value);
-      case 'number': return value.toLocaleString('pt-BR'); // Para contagem de clientes
-      default: return value;
+      case 'currency':
+        return formatCurrency(value);
+      case 'percent':
+        return formatPercent(value);
+      case 'number':
+        return value.toLocaleString('pt-BR');
+      default:
+        return value;
     }
   }, [value, type, privacyMode]);
 
   return (
-    <div 
+    <div
       onClick={onClick}
       className={`
-        relative overflow-hidden
-        glass-panel p-6 rounded-[32px] border border-white/40 shadow-xl
-        transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl
-        ${onClick ? 'cursor-pointer active:scale-95' : ''}
-        bg-white/60 backdrop-blur-xl
+        glass-window glass-panel-3d rounded-[32px] p-6
+        border border-red-500/40 shadow-2xl
+        transition-all duration-500 hover:-translate-y-1 hover:shadow-red-600/25
+        ${onClick ? 'cursor-pointer active:scale-[0.99]' : ''}
       `}
     >
-      {/* Background Decorativo (Glow) */}
-      <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-full blur-2xl -mr-8 -mt-8 pointer-events-none"></div>
+      <div className="pointer-events-none absolute -top-16 -right-10 h-36 w-36 rounded-full bg-red-600/30 blur-3xl"></div>
+      <div className="pointer-events-none absolute -bottom-20 -left-16 h-36 w-36 rounded-full bg-red-950/60 blur-3xl"></div>
 
       <div className="relative z-10">
-        <div className="flex justify-between items-start mb-4">
-          <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">{title}</h3>
-          <div className="p-2 bg-white/80 rounded-xl text-indigo-600 shadow-sm">
+        <div className="mb-4 flex items-start justify-between">
+          <h3 className="text-xs font-black uppercase tracking-widest text-red-100/90">{title}</h3>
+          <div className="rounded-xl border border-red-500/35 bg-black/25 p-2 text-red-100 shadow-sm backdrop-blur-xl">
             {icon}
           </div>
         </div>
 
         <div className="flex items-end gap-2">
-          <span className={`text-2xl font-black tracking-tight ${getValueColor()}`}>
-            {formattedValue}
-          </span>
+          <span className={`text-2xl font-black tracking-tight ${getValueColor()}`}>{formattedValue}</span>
           {subtitle && !privacyMode && (
-            <span className="text-[10px] font-bold text-slate-400 mb-1">
-              {subtitle}
-            </span>
+            <span className="mb-1 text-[10px] font-bold text-red-100/75">{subtitle}</span>
           )}
         </div>
       </div>

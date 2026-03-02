@@ -1,9 +1,9 @@
-import { supabase } from './lib/supabase';
-import { ClientContract, ClientMonthlyResult, CostData, GlobalSettings, MonthlyGrowthData } from './types';
-import { INITIAL_CONTRACTS, INITIAL_MONTHLY_RESULTS, ALL_COSTS, INITIAL_GROWTH_DATA } from './constants';
+import { supabase, isSupabaseEnabled } from './lib/supabase';
+import { ClientContract, ClientMonthlyResult, CostData, GlobalSettings } from './types';
+
+export { isSupabaseEnabled };
 
 // --- TRADUTORES: DO BANCO PARA O APP (READ) ---
-// Aqui a gente converte "snake_case" (banco) para "PascalCase" (App)
 
 const mapContractFromDB = (data: any): ClientContract => ({
   id: data.id,
@@ -15,7 +15,6 @@ const mapContractFromDB = (data: any): ClientContract => ({
   Descricao_Servico: data.service_description,
   Valor_Sugerido_Renovacao: data.suggested_renewal_value,
   Origem: data.origin,
-  // Campos Novos
   Tipo_Servico: data.service_type || 'Agency',
   UIZ_Setup_Fee: data.uiz_setup_fee || 0,
   UIZ_Valor_Mensal: data.uiz_monthly_price || 0
@@ -26,9 +25,7 @@ const mapResultFromDB = (data: any): ClientMonthlyResult => ({
   contractId: data.contract_id,
   Mes_Referencia: data.reference_month,
   Receita_Mensal_BRL: data.revenue,
-  // Campo Novo de Pagamento
   Status_Pagamento: data.payment_status || 'Pendente',
-  
   Conteudos_Contratados: data.contracted_content,
   Conteudos_Entregues: data.delivered_content,
   Conteudos_Nao_Entregues: data.not_delivered_content,
@@ -49,7 +46,7 @@ const mapCostFromDB = (data: any): CostData => ({
 // --- TRADUTORES: DO APP PARA O BANCO (WRITE) ---
 
 const mapContractToDB = (c: ClientContract) => ({
-  id: c.id.length < 10 ? undefined : c.id, // Remove ID temporário pro Banco criar UUID
+  id: c.id.length < 10 ? undefined : c.id,
   client_name: c.Cliente,
   status: c.Status_Contrato,
   start_date: c.Data_Inicio,
@@ -58,7 +55,6 @@ const mapContractToDB = (c: ClientContract) => ({
   service_description: c.Descricao_Servico,
   suggested_renewal_value: c.Valor_Sugerido_Renovacao,
   origin: c.Origem,
-  // Campos Novos
   service_type: c.Tipo_Servico || 'Agency',
   uiz_setup_fee: c.UIZ_Setup_Fee || 0,
   uiz_monthly_price: c.UIZ_Valor_Mensal || 0
@@ -69,9 +65,7 @@ const mapResultToDB = (r: ClientMonthlyResult) => ({
   contract_id: r.contractId,
   reference_month: r.Mes_Referencia,
   revenue: r.Receita_Mensal_BRL,
-  // Campo Novo
   payment_status: r.Status_Pagamento || 'Pendente',
-  
   contracted_content: r.Conteudos_Contratados,
   delivered_content: r.Conteudos_Entregues,
   not_delivered_content: r.Conteudos_Nao_Entregues,
@@ -89,10 +83,22 @@ const mapCostToDB = (c: CostData) => ({
   type: c.Tipo
 });
 
+const localId = () => `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
 // --- FUNÇÕES DE LEITURA (FETCH) ---
 
 export const fetchDashboardData = async () => {
-  console.log("🔄 Buscando dados do Supabase...");
+  if (!isSupabaseEnabled || !supabase) {
+    return {
+      contracts: [],
+      monthlyResults: [],
+      costs: [],
+      settings: null,
+      growthData: []
+    };
+  }
+
+  console.log('🔄 Buscando dados do Supabase...');
   try {
     const [contracts, results, costs, settings, growth] = await Promise.all([
       supabase.from('contracts').select('*'),
@@ -105,17 +111,16 @@ export const fetchDashboardData = async () => {
     if (contracts.error) throw contracts.error;
 
     return {
-      // Se não tiver dados, retorna array vazio (SEM DADOS FAKE)
       contracts: contracts.data?.length ? contracts.data.map(mapContractFromDB) : [],
       monthlyResults: results.data?.length ? results.data.map(mapResultFromDB) : [],
       costs: costs.data?.length ? costs.data.map(mapCostFromDB) : [],
       settings: settings.data?.settings_json || null,
-      growthData: growth.data?.length 
-        ? growth.data.map((d: any) => ({ month: d.reference_month, adSpend: d.ad_spend, leads: d.leads })) 
+      growthData: growth.data?.length
+        ? growth.data.map((d: any) => ({ month: d.reference_month, adSpend: d.ad_spend, leads: d.leads }))
         : []
     };
   } catch (error) {
-    console.error("❌ Erro ao buscar dados:", error);
+    console.error('❌ Erro ao buscar dados:', error);
     return null;
   }
 };
@@ -123,67 +128,71 @@ export const fetchDashboardData = async () => {
 // --- FUNÇÕES DE ESCRITA (WRITE) ---
 
 export const upsertContract = async (contract: ClientContract) => {
-  const payload = mapContractToDB(contract);
-  if (!payload.id) delete payload.id; 
+  if (!isSupabaseEnabled || !supabase) {
+    return { ...contract, id: contract.id.startsWith('new_') ? localId() : contract.id };
+  }
 
-  const { data, error } = await supabase
-    .from('contracts')
-    .upsert(payload)
-    .select()
-    .single();
+  const payload = mapContractToDB(contract);
+  if (!payload.id) delete payload.id;
+
+  const { data, error } = await supabase.from('contracts').upsert(payload).select().single();
 
   if (error) throw error;
   return mapContractFromDB(data);
 };
 
 export const deleteContract = async (id: string) => {
+  if (!isSupabaseEnabled || !supabase) return;
   const { error } = await supabase.from('contracts').delete().eq('id', id);
   if (error) throw error;
 };
 
 export const upsertMonthlyResult = async (result: ClientMonthlyResult) => {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ...result, id: result.id?.includes('temp') ? localId() : result.id };
+  }
+
   const payload = mapResultToDB(result);
   if (!payload.id) delete payload.id;
 
-  const { data, error } = await supabase
-    .from('monthly_results')
-    .upsert(payload)
-    .select()
-    .single();
+  const { data, error } = await supabase.from('monthly_results').upsert(payload).select().single();
 
   if (error) throw error;
   return mapResultFromDB(data);
 };
 
 export const upsertCost = async (cost: CostData) => {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ...cost, id: cost.id?.includes('temp') ? localId() : cost.id };
+  }
+
   const payload = mapCostToDB(cost);
   if (!payload.id) delete payload.id;
 
-  const { data, error } = await supabase
-    .from('costs')
-    .upsert(payload)
-    .select()
-    .single();
+  const { data, error } = await supabase.from('costs').upsert(payload).select().single();
 
   if (error) throw error;
   return mapCostFromDB(data);
 };
 
 export const deleteCost = async (id: string) => {
+  if (!isSupabaseEnabled || !supabase) return;
   const { error } = await supabase.from('costs').delete().eq('id', id);
   if (error) throw error;
 };
 
 export const saveSettings = async (settings: GlobalSettings) => {
+  if (!isSupabaseEnabled || !supabase) return;
   const { data: existing } = await supabase.from('global_settings').select('id').limit(1).single();
   const payload = { settings_json: settings, id: existing?.id };
   const { error } = await supabase.from('global_settings').upsert(payload);
-  if (error) console.error("Erro settings:", error);
+  if (error) console.error('Erro settings:', error);
 };
 
-export const saveGrowthData = async (month: string, adSpend: number) => {
+export const saveGrowthData = async (month: string, adSpend: number, leads?: number) => {
+  if (!isSupabaseEnabled || !supabase) return;
   const { error } = await supabase
     .from('growth_metrics')
-    .upsert({ reference_month: month, ad_spend: adSpend }, { onConflict: 'reference_month' });
-  if (error) console.error("Erro growth:", error);
+    .upsert({ reference_month: month, ad_spend: adSpend, leads: leads ?? null }, { onConflict: 'reference_month' });
+  if (error) console.error('Erro growth:', error);
 };
